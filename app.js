@@ -230,6 +230,8 @@ updateOfflineBanner();
 // ---------------------------------------------------------------------------
 
 async function boot() {
+  if (typeof showDebug_ === 'function') showDebug_('boot() started, liff typeof=' + typeof liff);
+
   // วาดหน้าแรกจากแคชทันที (ถ้าเคยเปิดสำเร็จมาก่อน) ก่อนรอ LIFF/เซิร์ฟเวอร์เลย
   // ให้รู้สึกเหมือนเปิดแอพแล้วเล่นได้เลย ปุ่มต่าง ๆ จะยังกดไม่ได้จริงจนกว่า bootReady
   const cachedHome = cacheGet_('home');
@@ -239,46 +241,54 @@ async function boot() {
     showScreen('S-01');
   }
 
-  let idToken;
   try {
-    await liff.init({ liffId: CFG.LIFF_ID });
-    if (!liff.isLoggedIn()) { liff.login(); return; }
-    idToken = liff.getIDToken();
-  } catch (e) {
-    if (!cachedHome) toast('เปิดผ่าน LINE เท่านั้น กรุณาเปิดลิงก์นี้ในแอพ LINE');
-    else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
-    return;
-  }
-  if (!idToken) {
-    if (!cachedHome) toast('ยืนยันตัวตนไม่สำเร็จ กรุณาเปิดแอพใหม่');
-    return;
-  }
+    let idToken;
+    try {
+      await liff.init({ liffId: CFG.LIFF_ID });
+      if (typeof showDebug_ === 'function') showDebug_('liff.init() resolved. isInClient=' + liff.isInClient() + ' isLoggedIn=' + liff.isLoggedIn());
+      if (!liff.isLoggedIn()) { liff.login(); return; }
+      idToken = liff.getIDToken();
+    } catch (e) {
+      if (typeof showDebug_ === 'function') showDebug_('liff.init() threw: ' + (e && e.message ? e.message : e));
+      if (!cachedHome) toast('เปิดผ่าน LINE เท่านั้น กรุณาเปิดลิงก์นี้ในแอพ LINE');
+      else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
+      return;
+    }
+    if (!idToken) {
+      if (typeof showDebug_ === 'function') showDebug_('getIDToken() returned falsy: ' + idToken);
+      if (!cachedHome) toast('ยืนยันตัวตนไม่สำเร็จ กรุณาเปิดแอพใหม่');
+      return;
+    }
 
-  const r = await api('auth.bootstrap', { idToken: idToken });
-  if (!r.ok) {
-    if (r.error.code === 'E_PENDING_APPROVAL') { toast(r.error.message); return; }
-    if (!cachedHome) toast(r.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
-    else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
-    return;
-  }
+    const r = await api('auth.bootstrap', { idToken: idToken });
+    if (!r.ok) {
+      if (typeof showDebug_ === 'function') showDebug_('auth.bootstrap failed: ' + (r.error && (r.error.code + ' ' + r.error.message)));
+      if (r.error.code === 'E_PENDING_APPROVAL') { toast(r.error.message); return; }
+      if (!cachedHome) toast(r.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
+      else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
+      return;
+    }
 
-  state.permVersion = r.permVersion;
+    state.permVersion = r.permVersion;
 
-  if (!r.data.known) {
-    renderGateModes_(r.data.gateModes);
-    showScreen('S-00a');
-    return;
-  }
+    if (!r.data.known) {
+      renderGateModes_(r.data.gateModes);
+      showScreen('S-00a');
+      return;
+    }
 
-  applySession_(r.data);
-  state.bootReady = true;
-  showScreen('S-01');
-  renderHome_({ silent: !!cachedHome });
+    applySession_(r.data);
+    state.bootReady = true;
+    showScreen('S-01');
+    renderHome_({ silent: !!cachedHome });
 
-  if (state.pendingRoute) {
-    const route = state.pendingRoute;
-    state.pendingRoute = null;
-    navigateTile_(route);
+    if (state.pendingRoute) {
+      const route = state.pendingRoute;
+      state.pendingRoute = null;
+      navigateTile_(route);
+    }
+  } finally {
+    window.__buscheckBootReady = true;
   }
 }
 

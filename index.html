@@ -5,8 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>BusCheck — เช็คยอดนักเรียนบนรถ</title>
 <link rel="stylesheet" href="styles.css">
+<script>
+  // ตัวจับ error ชั่วคราว (ลบออกทีหลังเมื่อหาสาเหตุจอค้างเจอแล้ว) — โชว์ error ตรงจอเลย
+  // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้
+  function showDebug_(msg) {
+    var el = document.getElementById('debug-panel');
+    if (!el) return;
+    el.style.display = 'block';
+    el.textContent += (el.textContent ? '\n---\n' : '') + msg;
+  }
+  window.addEventListener('error', function (e) {
+    showDebug_('JS Error: ' + (e.message || (e.error && e.error.message) || e) + '\n@ ' + (e.filename || '') + ':' + (e.lineno || ''));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    showDebug_('Unhandled rejection: ' + (r && r.message ? r.message : r));
+  });
+  setTimeout(function () {
+    if (!window.__buscheckBootReady) {
+      var info = 'BOOT TIMEOUT 10s\nliff typeof = ' + (typeof liff);
+      if (typeof liff !== 'undefined') {
+        try { info += '\nisInClient = ' + liff.isInClient(); } catch (e) { info += '\nisInClient ERR: ' + e.message; }
+        try { info += '\nisLoggedIn = ' + liff.isLoggedIn(); } catch (e) { info += '\nisLoggedIn ERR: ' + e.message; }
+        try { info += '\ngetOS = ' + liff.getOS(); } catch (e) { info += '\ngetOS ERR: ' + e.message; }
+        try { info += '\ngetLineVersion = ' + liff.getLineVersion(); } catch (e) { info += '\ngetLineVersion ERR: ' + e.message; }
+        try { info += '\nidToken = ' + liff.getIDToken(); } catch (e) { info += '\ngetIDToken ERR: ' + e.message; }
+      }
+      showDebug_(info);
+    }
+  }, 10000);
+</script>
 </head>
 <body>
+<div id="debug-panel" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font-size:12px;line-height:1.5;padding:10px;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;"></div>
 <div id="app">
 
   <div class="offline-banner" id="offline-banner"></div>
@@ -302,9 +333,9 @@
 
 <div id="toast"></div>
 
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js" onerror="showDebug_('โหลด LIFF SDK ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="showDebug_('โหลด html5-qrcode ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="showDebug_('โหลด qrcodejs ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
 </body>
