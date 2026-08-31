@@ -228,3 +228,17 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .empty-state { text-align: center; padding: 40px 24px; color: var(--text-muted); }
 .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid var(--border); border-top-color: var(--color-primary); border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- ตัวบอกสถานะซิงค์ข้อมูล ---------- */
+.sync-indicator {
+  font-size: 12px; color: var(--text-muted); text-align: right;
+  padding: 4px 16px 0; min-height: 16px; transition: background-color 0.4s ease;
+}
+.sync-indicator:empty { display: none; }
+.sync-indicator.loading { color: var(--color-primary); }
+.sync-indicator.flash { animation: flash-bg 0.7s ease; }
+@keyframes flash-bg {
+  0% { background-color: rgba(46, 134, 222, 0.14); }
+  100% { background-color: transparent; }
+}
+.btn-refresh-spin { animation: spin 0.7s linear infinite; }

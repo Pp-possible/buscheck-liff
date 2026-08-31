@@ -22,8 +22,46 @@ const state = {
   sponsor: null,
   html5Qr: null,
   html5QrVouch: null,
-  scanHistory: {}   // clientEventId -> true, กันยิงซ้ำเร็วเกินไปจากกล้อง
+  scanHistory: {},  // clientEventId -> true, กันยิงซ้ำเร็วเกินไปจากกล้อง
+  bootReady: false, // true เมื่อ auth.bootstrap ผ่านแล้วจริง (ก่อนหน้านี้หน้าจออาจวาดจากแคชไปก่อน)
+  pendingRoute: null
 };
+
+// ---------------------------------------------------------------------------
+// แคชหน้าจอ (stale-while-revalidate) — วาดจากของเก่าทันทีให้รู้สึกเหมือนเปิดแอพเกม
+// แล้วค่อยยิงไปเซิร์ฟเวอร์เงียบ ๆ เพื่ออัปเดตทับ พร้อมปุ่มรีเฟรชให้กดยืนยันเอง
+// ---------------------------------------------------------------------------
+
+const CACHE_PREFIX = 'buscheck_cache_';
+
+function cacheGet_(key) {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function cacheSet_(key, data) {
+  try { localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data: data, cachedAt: Date.now() })); } catch (e) {}
+}
+
+function setSyncBadge_(elId, mode, ts) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.classList.remove('loading');
+  if (mode === 'loading') { el.textContent = '🔄 กำลังอัปเดต...'; el.classList.add('loading'); }
+  else if (mode === 'cache') { el.textContent = '💾 ข้อมูลล่าสุดที่บันทึกไว้ — กำลังตรวจสอบใหม่'; }
+  else if (mode === 'fresh') { el.textContent = '✓ อัปเดตแล้ว ' + new Date(ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); flashSynced_(elId); }
+  else if (mode === 'error') { el.textContent = '⚠ อัปเดตไม่สำเร็จ — แตะ ⟳ เพื่อลองใหม่'; }
+}
+function flashSynced_(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+}
+function spinRefreshBtn_(btnId, on) {
+  const el = document.getElementById(btnId);
+  if (el) el.classList.toggle('btn-refresh-spin', !!on);
+}
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -192,21 +230,35 @@ updateOfflineBanner();
 // ---------------------------------------------------------------------------
 
 async function boot() {
+  // วาดหน้าแรกจากแคชทันที (ถ้าเคยเปิดสำเร็จมาก่อน) ก่อนรอ LIFF/เซิร์ฟเวอร์เลย
+  // ให้รู้สึกเหมือนเปิดแอพแล้วเล่นได้เลย ปุ่มต่าง ๆ จะยังกดไม่ได้จริงจนกว่า bootReady
+  const cachedHome = cacheGet_('home');
+  if (cachedHome && cachedHome.data) {
+    renderHomeFromData_(cachedHome.data);
+    setSyncBadge_('s01-sync', 'cache', cachedHome.cachedAt);
+    showScreen('S-01');
+  }
+
   let idToken;
   try {
     await liff.init({ liffId: CFG.LIFF_ID });
     if (!liff.isLoggedIn()) { liff.login(); return; }
     idToken = liff.getIDToken();
   } catch (e) {
-    toast('เปิดผ่าน LINE เท่านั้น กรุณาเปิดลิงก์นี้ในแอพ LINE');
+    if (!cachedHome) toast('เปิดผ่าน LINE เท่านั้น กรุณาเปิดลิงก์นี้ในแอพ LINE');
+    else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
     return;
   }
-  if (!idToken) { toast('ยืนยันตัวตนไม่สำเร็จ กรุณาเปิดแอพใหม่'); return; }
+  if (!idToken) {
+    if (!cachedHome) toast('ยืนยันตัวตนไม่สำเร็จ กรุณาเปิดแอพใหม่');
+    return;
+  }
 
   const r = await api('auth.bootstrap', { idToken: idToken });
   if (!r.ok) {
     if (r.error.code === 'E_PENDING_APPROVAL') { toast(r.error.message); return; }
-    toast(r.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
+    if (!cachedHome) toast(r.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
+    else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
     return;
   }
 
@@ -219,8 +271,15 @@ async function boot() {
   }
 
   applySession_(r.data);
+  state.bootReady = true;
   showScreen('S-01');
-  renderHome_();
+  renderHome_({ silent: !!cachedHome });
+
+  if (state.pendingRoute) {
+    const route = state.pendingRoute;
+    state.pendingRoute = null;
+    navigateTile_(route);
+  }
 }
 
 function applySession_(data) {
@@ -413,17 +472,14 @@ document.getElementById('btn-goto-home').addEventListener('click', () => {
 
 const TILE_ICONS = { scan: '📷', vouchQr: '🪪', myRounds: '🧾' };
 
-async function renderHome_() {
-  const r = await api('me.home', {});
-  if (!r.ok) { toast(r.error.message); return; }
-
-  document.getElementById('s01-name').textContent = r.data.profile.name;
-  document.getElementById('s01-role').textContent = r.data.profile.role || '';
-  document.getElementById('s01-sponsor').textContent = r.data.profile.registered_by_name
-    ? 'เพิ่มโดย ' + r.data.profile.registered_by_name : '';
+function renderHomeFromData_(data) {
+  document.getElementById('s01-name').textContent = data.profile.name;
+  document.getElementById('s01-role').textContent = data.profile.role || '';
+  document.getElementById('s01-sponsor').textContent = data.profile.registered_by_name
+    ? 'เพิ่มโดย ' + data.profile.registered_by_name : '';
 
   const tilesWrap = document.getElementById('s01-tiles');
-  tilesWrap.innerHTML = r.data.tiles.map(t => (
+  tilesWrap.innerHTML = data.tiles.map(t => (
     '<div class="tile" data-tile="' + t.key + '" data-route="' + (t.route || '') + '">' +
     '<span class="emoji">' + (TILE_ICONS[t.key] || '🔹') + '</span>' +
     '<span class="label">' + t.label + '</span>' +
@@ -434,26 +490,53 @@ async function renderHome_() {
   tilesWrap.querySelectorAll('.tile').forEach(el => {
     el.addEventListener('click', () => {
       const route = el.dataset.route;
-      if (route === 'S-02') { showScreen('S-02'); loadRounds_(); }
-      else if (route === 'S-19') { showScreen('S-19'); startVouchQrLoop_(); }
+      if (!state.bootReady) { state.pendingRoute = route; toast('กำลังเชื่อมต่อ รอสักครู่...'); return; }
+      navigateTile_(route);
     });
   });
 }
+
+function navigateTile_(route) {
+  if (route === 'S-02') { showScreen('S-02'); loadRounds_(); }
+  else if (route === 'S-19') { showScreen('S-19'); startVouchQrLoop_(); }
+}
+
+async function renderHome_(opts) {
+  opts = opts || {};
+  const cached = cacheGet_('home');
+  if (cached && !opts.silent) {
+    renderHomeFromData_(cached.data);
+    setSyncBadge_('s01-sync', 'cache', cached.cachedAt);
+  }
+  setSyncBadge_('s01-sync', 'loading');
+  spinRefreshBtn_('btn-refresh-home', true);
+
+  const r = await api('me.home', {});
+  spinRefreshBtn_('btn-refresh-home', false);
+  if (!r.ok) {
+    if (!cached) toast(r.error.message);
+    setSyncBadge_('s01-sync', 'error');
+    return;
+  }
+
+  cacheSet_('home', r.data);
+  renderHomeFromData_(r.data);
+  setSyncBadge_('s01-sync', 'fresh', Date.now());
+}
+
+document.getElementById('btn-refresh-home').addEventListener('click', () => renderHome_());
 
 // ---------------------------------------------------------------------------
 // S-02 เลือกรอบเช็ค
 // ---------------------------------------------------------------------------
 
-document.getElementById('btn-refresh-rounds').addEventListener('click', loadRounds_);
+document.getElementById('btn-refresh-rounds').addEventListener('click', () => loadRounds_());
 
-async function loadRounds_() {
+function renderRoundsList_(rounds) {
   const list = document.getElementById('s02-list');
-  list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
-  const r = await api('round.today', {});
-  if (!r.ok) { list.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
-  if (!r.data.length) { list.innerHTML = '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>'; return; }
+  if (!rounds.length) { list.innerHTML = '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>'; return; }
 
-  list.innerHTML = r.data.map(round => {
+  list.innerHTML = rounds.map(round => {
     const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
     const statusLabel = round.status === 'OPEN' ? 'เปิดอยู่' : round.status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
     const checkers = round.checkers.map(c => c.name).join(' + ') || 'ยังไม่มอบหมายผู้เช็ค ⚠';
@@ -468,6 +551,32 @@ async function loadRounds_() {
 
   list.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => openRound_(btn.dataset.open)));
   list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
+}
+
+async function loadRounds_(opts) {
+  opts = opts || {};
+  const list = document.getElementById('s02-list');
+  const cached = cacheGet_('rounds');
+  if (cached && !opts.silent) {
+    renderRoundsList_(cached.data);
+    setSyncBadge_('s02-sync', 'cache', cached.cachedAt);
+  } else if (!cached) {
+    list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  }
+  setSyncBadge_('s02-sync', 'loading');
+  spinRefreshBtn_('btn-refresh-rounds', true);
+
+  const r = await api('round.today', {});
+  spinRefreshBtn_('btn-refresh-rounds', false);
+  if (!r.ok) {
+    if (!cached) list.innerHTML = '<div class="empty-state">' + r.error.message + '</div>';
+    setSyncBadge_('s02-sync', 'error');
+    return;
+  }
+
+  cacheSet_('rounds', r.data);
+  renderRoundsList_(r.data);
+  setSyncBadge_('s02-sync', 'fresh', Date.now());
 }
 
 document.getElementById('btn-new-round').addEventListener('click', openCreateRoundDialog_);
@@ -505,14 +614,14 @@ document.getElementById('dlg-create-round-submit').addEventListener('click', asy
   document.getElementById('dlg-create-round').classList.remove('show');
   document.getElementById('cr-name').value = '';
   toast('สร้างรอบแล้ว — อย่าลืมมอบหมายผู้เช็คก่อนเปิดรอบ');
-  loadRounds_();
+  loadRounds_({ silent: true });
 });
 
 async function openRound_(roundId) {
   const r = await api('round.open', { roundId: roundId });
   if (!r.ok) { toast(r.error.message); return; }
   toast('เปิดรอบแล้ว');
-  loadRounds_();
+  loadRounds_({ silent: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -729,10 +838,30 @@ let rosterCache = [];
 let rosterTab = 'all';
 
 async function loadRoster_() {
+  const cacheKey = 'roster_' + state.currentRoundId;
+  const cached = cacheGet_(cacheKey);
+  if (cached) {
+    rosterCache = cached.data;
+    renderRosterList_();
+    setSyncBadge_('s04-sync', 'cache', cached.cachedAt);
+  } else {
+    document.getElementById('s04-list').innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  }
+  setSyncBadge_('s04-sync', 'loading');
+  spinRefreshBtn_('btn-refresh-roster', true);
+
   const r = await api('round.checks', { roundId: state.currentRoundId });
-  if (!r.ok) { toast(r.error.message); return; }
+  spinRefreshBtn_('btn-refresh-roster', false);
+  if (!r.ok) {
+    if (!cached) toast(r.error.message);
+    setSyncBadge_('s04-sync', 'error');
+    return;
+  }
+
+  cacheSet_(cacheKey, r.data.items);
   rosterCache = r.data.items;
   renderRosterList_();
+  setSyncBadge_('s04-sync', 'fresh', Date.now());
 }
 
 document.querySelectorAll('#s04-tabs .chip').forEach(chip => chip.addEventListener('click', () => {
@@ -742,6 +871,7 @@ document.querySelectorAll('#s04-tabs .chip').forEach(chip => chip.addEventListen
   renderRosterList_();
 }));
 document.getElementById('s04-search').addEventListener('input', renderRosterList_);
+document.getElementById('btn-refresh-roster').addEventListener('click', loadRoster_);
 
 function renderRosterList_() {
   const q = document.getElementById('s04-search').value.trim().toLowerCase();
@@ -765,12 +895,34 @@ function renderRosterList_() {
 // S-05 ปิดรอบ / ปิดเที่ยวรถ
 // ---------------------------------------------------------------------------
 
-async function loadCloseScreen_() {
-  const rr = await api('round.get', { roundId: state.currentRoundId });
-  if (rr.ok) {
-    document.getElementById('s05-round-summary').textContent = rr.data.checked + '/' + rr.data.expected + ' คน · เช็คซ้ำ ' + rr.data.duplicateAttempts + ' ครั้ง';
-  }
+function renderCloseSummary_(round) {
+  document.getElementById('s05-round-summary').textContent = round.checked + '/' + round.expected + ' คน · เช็คซ้ำ ' + round.duplicateAttempts + ' ครั้ง';
 }
+
+async function loadCloseScreen_() {
+  const cacheKey = 'close_' + state.currentRoundId;
+  const cached = cacheGet_(cacheKey);
+  if (cached) {
+    renderCloseSummary_(cached.data);
+    setSyncBadge_('s05-sync', 'cache', cached.cachedAt);
+  }
+  setSyncBadge_('s05-sync', 'loading');
+  spinRefreshBtn_('btn-refresh-close', true);
+
+  const rr = await api('round.get', { roundId: state.currentRoundId });
+  spinRefreshBtn_('btn-refresh-close', false);
+  if (!rr.ok) {
+    if (!cached) toast(rr.error.message);
+    setSyncBadge_('s05-sync', 'error');
+    return;
+  }
+
+  cacheSet_(cacheKey, rr.data);
+  renderCloseSummary_(rr.data);
+  setSyncBadge_('s05-sync', 'fresh', Date.now());
+}
+
+document.getElementById('btn-refresh-close').addEventListener('click', loadCloseScreen_);
 
 document.getElementById('btn-close-round').addEventListener('click', async () => {
   const r = await api('round.close', { roundId: state.currentRoundId });
