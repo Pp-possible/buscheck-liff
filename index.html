@@ -8,12 +8,21 @@
 <script>
   // ตัวจับ error ชั่วคราว (ลบออกทีหลังเมื่อหาสาเหตุจอค้างเจอแล้ว) — โชว์ error ตรงจอเลย
   // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้
+  // (เก็บคิวไว้ก่อนเพราะสคริปต์นี้รันตอน <head> ก่อน #debug-panel ใน <body> จะถูกสร้าง)
+  window.__debugQueue = [];
   function showDebug_(msg) {
     var el = document.getElementById('debug-panel');
-    if (!el) return;
+    if (!el) { window.__debugQueue.push(msg); return; }
     el.style.display = 'block';
     el.textContent += (el.textContent ? '\n---\n' : '') + msg;
   }
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.__debugQueue.length) {
+      var q = window.__debugQueue; window.__debugQueue = [];
+      q.forEach(showDebug_);
+    }
+  });
+  showDebug_('head script executed ' + new Date().toISOString() + ' — build 0831b');
   window.addEventListener('error', function (e) {
     showDebug_('JS Error: ' + (e.message || (e.error && e.error.message) || e) + '\n@ ' + (e.filename || '') + ':' + (e.lineno || ''));
   }, true);
