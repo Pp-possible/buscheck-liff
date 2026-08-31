@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BusCheck — เช็คยอดนักเรียนบนรถ</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <div class="offline-banner" id="offline-banner"></div>
+
+  <!-- ============ S-00a เลือกประเภท ============ -->
+  <section class="screen" data-screen="S-00a">
+    <div class="hero">
+      <div style="font-size:40px;">🚌</div>
+      <h1>BusCheck</h1>
+      <p>ระบบเช็คยอดนักเรียนบนรถ</p>
+      <p id="s00a-hint">ยังไม่พบบัญชีของคุณในระบบ<br>กรุณาเลือกประเภทการลงทะเบียน</p>
+    </div>
+    <button class="choice-btn" id="btn-reg-teacher" style="display:none">
+      <span class="emoji">👨‍🏫</span>
+      <span class="label">ลงทะเบียนเป็นครู/เจ้าหน้าที่</span>
+      <span class="hint">ต้องสแกน QR ของผู้ดูแลระบบสูงสุด</span>
+    </button>
+    <button class="choice-btn" id="btn-reg-student" style="display:none">
+      <span class="emoji">🎒</span>
+      <span class="label">ลงทะเบียนเป็นนักเรียน</span>
+      <span class="hint">ต้องสแกน QR ของครู</span>
+    </button>
+  </section>
+
+  <!-- ============ S-00b สแกน QR ผู้รับรอง ============ -->
+  <section class="screen" data-screen="S-00b">
+    <div class="topbar">
+      <button class="back" data-back="S-00a">←</button>
+      <div class="title" id="s00b-title">สแกน QR ผู้รับรอง</div>
+    </div>
+    <div class="card">
+      <p id="s00b-instruction" style="margin:0 0 12px;color:var(--text-muted)"></p>
+      <div id="qr-reader-vouch" style="border-radius:14px;overflow:hidden;background:#000;min-height:260px;"></div>
+      <p style="font-size:13px;color:var(--text-muted);margin-top:12px;">💡 QR เปลี่ยนใหม่ทุก 20 วินาที ถ้าสแกนไม่ทัน ให้ผู้รับรองกดสร้างใหม่</p>
+    </div>
+  </section>
+
+  <!-- ============ S-00c ฟอร์มลงทะเบียน ============ -->
+  <section class="screen" data-screen="S-00c">
+    <div class="topbar">
+      <button class="back" data-back="S-00b">←</button>
+      <div class="title">กรอกข้อมูล</div>
+    </div>
+    <div class="card" id="s00c-sponsor-card">
+      <div class="card-title">✅ ยืนยันผู้รับรองแล้ว</div>
+      <div id="s00c-sponsor-name" style="font-weight:700"></div>
+      <div id="s00c-sponsor-role" style="color:var(--text-muted);font-size:13px"></div>
+      <div id="s00c-countdown" style="margin-top:8px;font-weight:600;color:var(--color-primary)"></div>
+    </div>
+
+    <div id="s00c-form-teacher" style="display:none">
+      <div class="field"><label>ชื่อ-นามสกุล *</label><input id="t-fullName" type="text"></div>
+      <div class="field"><label>รหัสบุคลากร</label><input id="t-employeeCode" type="text"></div>
+      <div class="field"><label>เบอร์โทร *</label><input id="t-phone" type="tel"></div>
+      <div class="field"><label>รถที่รับผิดชอบ</label><div class="chip-group" id="t-buses"></div></div>
+      <div class="field"><button class="btn btn-primary btn-block" id="btn-submit-teacher">ยืนยันการลงทะเบียน</button></div>
+    </div>
+
+    <div id="s00c-form-student" style="display:none">
+      <div class="field"><label>ชื่อ-นามสกุล *</label><input id="s-fullName" type="text"></div>
+      <div class="field"><label>ชื่อเล่น</label><input id="s-nickname" type="text"></div>
+      <div class="field"><label>ชั้น *</label><input id="s-classLevel" type="text" placeholder="เช่น ป.4"></div>
+      <div class="field"><label>ห้อง *</label><input id="s-room" type="text" placeholder="เช่น 2"></div>
+      <div class="field"><label>เบอร์ผู้ปกครอง *</label><input id="s-guardianPhone" type="tel"></div>
+      <div class="field"><label>ชื่อผู้ปกครอง *</label><input id="s-guardianName" type="text"></div>
+      <div class="field"><label>รถ *</label><select id="s-busId"></select></div>
+      <div class="field"><label>จุดขึ้น-ลง *</label><select id="s-stopId"></select></div>
+      <div class="field">
+        <label>ใช้รถ *</label>
+        <div class="chip-group">
+          <div class="chip selected" data-ride="am">เช้า</div>
+          <div class="chip selected" data-ride="pm">เย็น</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>วันที่ใช้ *</label>
+        <div class="chip-group" id="s-serviceDays">
+          <div class="chip selected" data-day="MO">จ</div><div class="chip selected" data-day="TU">อ</div>
+          <div class="chip selected" data-day="WE">พ</div><div class="chip selected" data-day="TH">พฤ</div>
+          <div class="chip selected" data-day="FR">ศ</div>
+        </div>
+      </div>
+      <div class="field"><button class="btn btn-primary btn-block" id="btn-submit-student">ยืนยันการลงทะเบียน</button></div>
+    </div>
+  </section>
+
+  <!-- ============ S-00d สำเร็จ (ใช้ร่วม S-19 แสดง QR) ============ -->
+  <section class="screen" data-screen="S-00d">
+    <div class="topbar"><div class="title">ลงทะเบียนสำเร็จ</div></div>
+    <div class="qr-wrap">
+      <div id="s00d-message" style="text-align:center;margin-bottom:16px;font-weight:600"></div>
+      <div id="s00d-qr-box" class="qr-box" style="display:none">
+        <div id="s00d-qr-canvas"></div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:20px" id="btn-goto-home">เข้าสู่ระบบ</button>
+    </div>
+  </section>
+
+  <!-- ============ S-01 หน้าแรก ============ -->
+  <section class="screen" data-screen="S-01">
+    <div class="topbar">
+      <div class="title">BusCheck</div>
+      <button class="back" id="btn-logout" title="ออกจากระบบ">⎋</button>
+    </div>
+    <div class="card profile-card">
+      <div class="profile-avatar" id="s01-avatar">👤</div>
+      <div class="profile-info">
+        <div class="name" id="s01-name"></div>
+        <div class="role" id="s01-role"></div>
+        <div class="sponsor" id="s01-sponsor"></div>
+      </div>
+    </div>
+    <div class="tiles-grid" id="s01-tiles"></div>
+    <div style="text-align:center;color:var(--text-muted);font-size:12px;margin-top:16px;">BusCheck v1 · เฟส 1</div>
+  </section>
+
+  <!-- ============ S-02 เลือกรอบเช็ค ============ -->
+  <section class="screen" data-screen="S-02">
+    <div class="topbar">
+      <button class="back" data-back="S-01">←</button>
+      <div class="title">รอบเช็ควันนี้</div>
+      <button class="back" id="btn-refresh-rounds" title="รีเฟรช">⟳</button>
+    </div>
+    <div id="s02-list"></div>
+  </section>
+
+  <!-- ============ S-03 หน้าสแกน ============ -->
+  <section class="screen" data-screen="S-03">
+    <div class="scan-topbar">
+      <div class="line1" id="s03-round-name"></div>
+      <div class="line2" id="s03-round-sub"></div>
+    </div>
+    <div class="offline-banner" id="offline-banner-2"></div>
+    <div class="counts-row">
+      <div class="count-box onboard"><div class="num" id="s03-count-onboard">0</div><div class="label">บนรถ</div></div>
+      <div class="count-box"><div class="num" id="s03-count-checked">0</div><div class="label">เช็คแล้ว</div></div>
+      <div class="count-box"><div class="num" id="s03-count-remaining">0</div><div class="label">ยังไม่เช็ค</div></div>
+    </div>
+    <div class="mode-toggle">
+      <button id="s03-mode-board" class="active board">⇧ ขึ้นรถ</button>
+      <button id="s03-mode-drop" class="drop">⇩ ลงรถ</button>
+    </div>
+    <div id="qr-reader"></div>
+    <div class="field" style="margin-top:10px;">
+      <input id="s03-search" type="text" placeholder="🔍 ค้นหาชื่อ/รหัสนักเรียน (บัตรหาย/QR เสีย)">
+    </div>
+    <div id="s03-search-results"></div>
+    <div class="scan-feed" id="s03-feed"></div>
+    <div class="bottom-actions">
+      <button class="btn btn-secondary" id="btn-goto-s04">☰ รายชื่อ</button>
+      <button class="btn btn-primary" id="btn-goto-s05">ปิดรอบ/เที่ยว →</button>
+    </div>
+  </section>
+
+  <!-- ============ S-04 รายชื่อ ============ -->
+  <section class="screen" data-screen="S-04">
+    <div class="topbar">
+      <button class="back" data-back="S-03">←</button>
+      <div class="title">รายชื่อนักเรียน</div>
+    </div>
+    <div class="search-bar"><input id="s04-search" type="text" placeholder="ค้นหาชื่อ/ชื่อเล่น/รหัส"></div>
+    <div class="filter-tabs" id="s04-tabs">
+      <div class="chip selected" data-tab="all">ทั้งหมด</div>
+      <div class="chip" data-tab="pending">ยังไม่ขึ้น</div>
+      <div class="chip" data-tab="onboard">บนรถ</div>
+      <div class="chip" data-tab="completed">ลงแล้ว</div>
+      <div class="chip" data-tab="absent">ขาด</div>
+      <div class="chip" data-tab="transfer">มาจากคันอื่น</div>
+    </div>
+    <div id="s04-list"></div>
+  </section>
+
+  <!-- ============ S-05 ปิดรอบ/ปิดเที่ยว ============ -->
+  <section class="screen" data-screen="S-05">
+    <div class="topbar">
+      <button class="back" data-back="S-03">←</button>
+      <div class="title">ปิดรอบ / ปิดเที่ยวรถ</div>
+    </div>
+    <div class="card" id="s05-round-card">
+      <div class="card-title">ปิดรอบเช็คนี้</div>
+      <div id="s05-round-summary"></div>
+      <button class="btn btn-primary btn-block" id="btn-close-round" style="margin-top:10px">ปิดรอบ</button>
+    </div>
+    <div class="card" id="s05-trip-card">
+      <div class="card-title">ปิดเที่ยวรถ</div>
+      <div id="s05-trip-summary"></div>
+      <div id="s05-blockers"></div>
+      <button class="btn btn-primary btn-block" id="btn-close-trip" style="margin-top:10px">ปิดเที่ยวรถ</button>
+    </div>
+  </section>
+
+  <!-- ============ S-19 QR รับรองของฉัน ============ -->
+  <section class="screen" data-screen="S-19">
+    <div class="topbar">
+      <button class="back" data-back="S-01">←</button>
+      <div class="title">QR รับรองการลงทะเบียน</div>
+    </div>
+    <div class="qr-wrap">
+      <div class="qr-box"><div id="s19-qr-canvas"></div></div>
+      <div class="qr-countdown" id="s19-countdown">⟳ --</div>
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn btn-secondary" id="btn-vouch-new">สร้างใหม่</button>
+        <button class="btn btn-danger" id="btn-vouch-revoke-all">ยกเลิก QR ทั้งชุด</button>
+      </div>
+    </div>
+    <div class="card">
+      <div id="s19-scope"></div>
+      <div id="s19-usedtoday" style="margin-top:6px;color:var(--text-muted)"></div>
+      <p style="color:var(--color-error);font-size:13px;margin-top:10px;">⚠ ให้สแกนต่อหน้าคุณเท่านั้น อย่าส่งภาพ QR นี้ให้ใคร</p>
+    </div>
+    <div class="card">
+      <div class="card-title">รายการที่ฉันรับรอง</div>
+      <div id="s19-vouches-list"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============ Dialog: ยืนยันย้ายรถ / เปิดสถานะใหม่ ============ -->
+<div class="overlay" id="dlg-confirm-transfer">
+  <div class="dialog">
+    <h3 id="dlg-transfer-title">ยืนยันย้ายรถ?</h3>
+    <p id="dlg-transfer-body"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="dlg-transfer-cancel">ยกเลิก</button>
+      <button class="btn btn-primary" id="dlg-transfer-confirm">ยืนยัน</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Dialog: เช็คซ้ำ ============ -->
+<div class="overlay" id="dlg-duplicate">
+  <div class="dialog">
+    <h3>⚠️ เช็คไปแล้วในรอบนี้</h3>
+    <p id="dlg-duplicate-body"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="dlg-duplicate-ack">รับทราบ</button>
+      <button class="btn btn-danger" id="dlg-duplicate-override" style="display:none">เช็คทับ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Dialog: จัดการรายคน (ขาด/ผู้ปกครองรับเอง/ขึ้นคันอื่น/ยังไม่ทราบ) ============ -->
+<div class="overlay" id="dlg-manage-student">
+  <div class="dialog">
+    <h3 id="dlg-manage-title">จัดการสถานะ</h3>
+    <div class="dialog-actions" style="flex-wrap:wrap;">
+      <button class="btn btn-secondary" data-action="ABSENT">ขาด</button>
+      <button class="btn btn-secondary" data-action="EXCUSED">ผู้ปกครองรับเอง</button>
+      <button class="btn btn-secondary" data-action="TRANSFER">ขึ้นคันอื่น</button>
+      <button class="btn btn-danger" data-action="UNRESOLVED">ยังไม่ทราบ</button>
+    </div>
+    <button class="btn btn-secondary btn-block" id="dlg-manage-cancel" style="margin-top:10px">ยกเลิก</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
