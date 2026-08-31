@@ -5,6 +5,9 @@
 
 const CFG = window.BUSCHECK_CONFIG;
 
+// ต้องประกาศก่อน boot() เรียกใช้ (renderHomeFromData_ อาจถูกเรียกจาก boot() ทันทีถ้ามีแคชอยู่แล้ว)
+const TILE_ICONS = { scan: '📷', vouchQr: '🪪', myRounds: '🧾' };
+
 const state = {
   sessionToken: null,
   persona: null,
@@ -230,8 +233,6 @@ updateOfflineBanner();
 // ---------------------------------------------------------------------------
 
 async function boot() {
-  if (typeof showDebug_ === 'function') showDebug_('boot() started, liff typeof=' + typeof liff);
-
   // วาดหน้าแรกจากแคชทันที (ถ้าเคยเปิดสำเร็จมาก่อน) ก่อนรอ LIFF/เซิร์ฟเวอร์เลย
   // ให้รู้สึกเหมือนเปิดแอพแล้วเล่นได้เลย ปุ่มต่าง ๆ จะยังกดไม่ได้จริงจนกว่า bootReady
   const cachedHome = cacheGet_('home');
@@ -245,24 +246,20 @@ async function boot() {
     let idToken;
     try {
       await liff.init({ liffId: CFG.LIFF_ID });
-      if (typeof showDebug_ === 'function') showDebug_('liff.init() resolved. isInClient=' + liff.isInClient() + ' isLoggedIn=' + liff.isLoggedIn());
       if (!liff.isLoggedIn()) { liff.login(); return; }
       idToken = liff.getIDToken();
     } catch (e) {
-      if (typeof showDebug_ === 'function') showDebug_('liff.init() threw: ' + (e && e.message ? e.message : e));
       if (!cachedHome) toast('เปิดผ่าน LINE เท่านั้น กรุณาเปิดลิงก์นี้ในแอพ LINE');
       else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
       return;
     }
     if (!idToken) {
-      if (typeof showDebug_ === 'function') showDebug_('getIDToken() returned falsy: ' + idToken);
       if (!cachedHome) toast('ยืนยันตัวตนไม่สำเร็จ กรุณาเปิดแอพใหม่');
       return;
     }
 
     const r = await api('auth.bootstrap', { idToken: idToken });
     if (!r.ok) {
-      if (typeof showDebug_ === 'function') showDebug_('auth.bootstrap failed: ' + (r.error && (r.error.code + ' ' + r.error.message)));
       if (r.error.code === 'E_PENDING_APPROVAL') { toast(r.error.message); return; }
       if (!cachedHome) toast(r.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
       else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
@@ -479,8 +476,6 @@ document.getElementById('btn-goto-home').addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 // S-01 หน้าแรก
 // ---------------------------------------------------------------------------
-
-const TILE_ICONS = { scan: '📷', vouchQr: '🪪', myRounds: '🧾' };
 
 function renderHomeFromData_(data) {
   document.getElementById('s01-name').textContent = data.profile.name;

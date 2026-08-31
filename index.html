@@ -6,9 +6,8 @@
 <title>BusCheck — เช็คยอดนักเรียนบนรถ</title>
 <link rel="stylesheet" href="styles.css">
 <script>
-  // ตัวจับ error ชั่วคราว (ลบออกทีหลังเมื่อหาสาเหตุจอค้างเจอแล้ว) — โชว์ error ตรงจอเลย
-  // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้
-  // (เก็บคิวไว้ก่อนเพราะสคริปต์นี้รันตอน <head> ก่อน #debug-panel ใน <body> จะถูกสร้าง)
+  // ตัวจับ error ถาวร — โชว์ error ตรงจอเลยเมื่อมีปัญหาจริงเท่านั้น (ปกติจะไม่ขึ้นอะไร)
+  // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้ เวลามีปัญหาจะได้เห็นสาเหตุจากภาพหน้าจอผู้ใช้ได้เลย
   window.__debugQueue = [];
   function showDebug_(msg) {
     var el = document.getElementById('debug-panel');
@@ -22,7 +21,6 @@
       q.forEach(showDebug_);
     }
   });
-  showDebug_('head script executed ' + new Date().toISOString() + ' — build 0831b');
   window.addEventListener('error', function (e) {
     showDebug_('JS Error: ' + (e.message || (e.error && e.error.message) || e) + '\n@ ' + (e.filename || '') + ':' + (e.lineno || ''));
   }, true);
