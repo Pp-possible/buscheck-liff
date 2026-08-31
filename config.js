@@ -3,7 +3,7 @@
 // -> เอา URL หน้าเว็บไปใส่เป็น Endpoint ของ LIFF -> ได้ LIFF_ID -> ใส่ที่นี่ -> อัปโหลดอีกครั้ง
 window.BUSCHECK_CONFIG = {
   LIFF_ID: '2011340916-jNIJUaEi',
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbzfYmstdp00LNT_SnKIrqHjaP2T5lSgzUKuDRajUc5ffNnsNBfTTygELAiqUwx6guFSsw/exec',
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbwIAHVU49QuaZEuLG5fkqUk5GXt_GIAuCfszw41dAtGRtQmAOK-bbgK29FrT68aKfo2ng/exec',
   POLL_ROSTER_SEC: 10,
   POLL_DASHBOARD_SEC: 20,
   OFFLINE_FLUSH_SEC: 5,
