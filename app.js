@@ -470,6 +470,44 @@ async function loadRounds_() {
   list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
 }
 
+document.getElementById('btn-new-round').addEventListener('click', openCreateRoundDialog_);
+document.getElementById('dlg-create-round-cancel').addEventListener('click', () => {
+  document.getElementById('dlg-create-round').classList.remove('show');
+});
+
+async function openCreateRoundDialog_() {
+  const busSel = document.getElementById('cr-bus');
+  busSel.innerHTML = '<option value="">กำลังโหลด...</option>';
+  document.getElementById('dlg-create-round').classList.add('show');
+
+  const r = await api('me.buses', {});
+  const buses = r.ok ? r.data : [];
+  busSel.innerHTML = buses.map(b => '<option value="' + b.bus_id + '">' + b.bus_code + '</option>').join('') || '<option value="">(ไม่มีรถในขอบเขตของคุณ)</option>';
+}
+
+document.getElementById('dlg-create-round-submit').addEventListener('click', async () => {
+  const roundName = document.getElementById('cr-name').value.trim();
+  const busId = document.getElementById('cr-bus').value;
+  if (!roundName) { toast('กรุณาระบุชื่อรอบ'); return; }
+  if (!busId) { toast('กรุณาเลือกรถ'); return; }
+
+  const r = await api('round.create', {
+    date: new Date().toISOString().slice(0, 10),
+    direction: document.getElementById('cr-direction').value,
+    scopeType: 'BUS',
+    scopeId: busId,
+    roundName: roundName,
+    roundType: document.getElementById('cr-type').value,
+    requireAll: document.getElementById('cr-require-all').checked
+  });
+  if (!r.ok) { toast(r.error.message); return; }
+
+  document.getElementById('dlg-create-round').classList.remove('show');
+  document.getElementById('cr-name').value = '';
+  toast('สร้างรอบแล้ว — อย่าลืมมอบหมายผู้เช็คก่อนเปิดรอบ');
+  loadRounds_();
+});
+
 async function openRound_(roundId) {
   const r = await api('round.open', { roundId: roundId });
   if (!r.ok) { toast(r.error.message); return; }
