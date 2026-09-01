@@ -1135,21 +1135,12 @@ function renderApprovalsList_(regs) {
       (isTeacher
         ? '<div class="field" style="margin:8px 0 0;"><label>สิทธิ์ที่จะให้</label><select class="s17-role-select">' +
         grantable.map(rr => '<option value="' + rr.role_code + '">' + rr.role_name_th + '</option>').join('') + '</select></div>'
-        : '<div class="chip-group" style="margin:8px 0 0;">' +
-        '<div class="chip selected" data-ride="am">เช้า</div><div class="chip selected" data-ride="pm">เย็น</div>' +
-        '</div>' +
-        '<div class="chip-group s17-days" style="margin-top:6px;">' +
-        ['MO', 'TU', 'WE', 'TH', 'FR'].map(d => '<div class="chip selected" data-day="' + d + '">' + ({ MO: 'จ', TU: 'อ', WE: 'พ', TH: 'พฤ', FR: 'ศ' }[d]) + '</div>').join('') +
-        '</div>') +
+        : '') +
       '<div class="dialog-actions" style="margin-top:10px;">' +
       '<button class="btn btn-secondary" data-reject="' + r.reg_id + '">ไม่อนุมัติ</button>' +
       '<button class="btn btn-primary" data-approve="' + r.reg_id + '" data-type="' + r.reg_type + '">อนุมัติ</button>' +
       '</div></div>';
   }).join('');
-
-  list.querySelectorAll('.card').forEach(card => {
-    card.querySelectorAll('.chip[data-ride], .chip[data-day]').forEach(chip => chip.addEventListener('click', () => chip.classList.toggle('selected')));
-  });
 
   list.querySelectorAll('[data-approve]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
     const regId = e.currentTarget.dataset.approve;
@@ -1161,12 +1152,7 @@ function renderApprovalsList_(regs) {
       if (!roleCode) { toast('กรุณาเลือกสิทธิ์'); return; }
       r = await api('reg.approveTeacher', { regId: regId, roleCode: roleCode });
     } else {
-      const rideAm = card.querySelector('.chip[data-ride="am"]').classList.contains('selected');
-      const ridePm = card.querySelector('.chip[data-ride="pm"]').classList.contains('selected');
-      const serviceDays = Array.from(card.querySelectorAll('.s17-days .chip.selected')).map(c => c.dataset.day);
-      if (!rideAm && !ridePm) { toast('ต้องระบุว่าใช้รถเช้าหรือเย็นอย่างน้อยหนึ่งช่วง'); return; }
-      if (!serviceDays.length) { toast('กรุณาระบุวันที่ใช้บริการ'); return; }
-      r = await api('reg.approveStudent', { regId: regId, studentPatch: { rideAm: rideAm, ridePm: ridePm, serviceDays: serviceDays } });
+      r = await api('reg.approveStudent', { regId: regId });
     }
     if (!r.ok) { toast(r.error.message); return; }
     toast('อนุมัติแล้ว');
