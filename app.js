@@ -246,6 +246,15 @@ updateOfflineBanner();
 // Bootstrap — จุดเริ่มต้นของแอพ
 // ---------------------------------------------------------------------------
 
+// รองรับลิงก์เจาะจงหน้า (?p=scan/vouch/bus) — ใช้กับปุ่ม Rich Menu ของบอทตอบกลับ (เฟส 3, 9.7)
+// LIFF ตอน redirect ผ่านหน้า login อาจย้าย query string เดิมไปไว้ใน liff.state แทน จึงต้องเช็คทั้งสองที่
+function deepLinkRoute_() {
+  const ROUTE_MAP = { scan: 'S-02', vouch: 'S-19', bus: 'S-20' };
+  let p = new URLSearchParams(location.search).get('p');
+  if (!p && liff.state) p = new URLSearchParams(liff.state.replace(/^\?/, '')).get('p');
+  return ROUTE_MAP[p] || null;
+}
+
 async function boot() {
   // วาดหน้าแรกจากแคชทันที (ถ้าเคยเปิดสำเร็จมาก่อน) ก่อนรอ LIFF/เซิร์ฟเวอร์เลย
   // ให้รู้สึกเหมือนเปิดแอพแล้วเล่นได้เลย ปุ่มต่าง ๆ จะยังกดไม่ได้จริงจนกว่า bootReady
@@ -262,6 +271,7 @@ async function boot() {
       await liff.init({ liffId: CFG.LIFF_ID });
       if (!liff.isLoggedIn()) { liff.login(); return; }
       idToken = liff.getIDToken();
+      if (!state.pendingRoute) state.pendingRoute = deepLinkRoute_();
     } catch (e) {
       if (!cachedHome) toast('เปิดผ่าน LINE เท่านั้น กรุณาเปิดลิงก์นี้ในแอพ LINE');
       else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
