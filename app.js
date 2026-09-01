@@ -458,14 +458,7 @@ function showVouchForm_(data) {
   document.getElementById('s00c-form-teacher').style.display = state.regType === 'TEACHER' ? 'block' : 'none';
   document.getElementById('s00c-form-student').style.display = state.regType === 'STUDENT' ? 'block' : 'none';
 
-  if (state.regType === 'TEACHER') {
-    renderBusChips_();
-  } else {
-    populateBusStopSelects_();
-    document.querySelectorAll('#s00c-form-student .chip[data-ride], #s00c-form-student .chip[data-day]').forEach(chip => {
-      chip.onclick = () => chip.classList.toggle('selected');
-    });
-  }
+  if (state.regType === 'TEACHER') renderBusChips_();
   showScreen('S-00c');
 }
 
@@ -475,15 +468,6 @@ async function renderBusChips_() {
   const wrap = document.getElementById('t-buses');
   wrap.innerHTML = buses.map(b => '<div class="chip" data-bus="' + b.bus_id + '">' + b.bus_code + '</div>').join('') || '<span style="color:var(--text-muted);font-size:13px">(ยังไม่มีรถในระบบ — ให้ผู้ดูแลกำหนดภายหลัง)</span>';
   wrap.querySelectorAll('.chip').forEach(c => c.onclick = () => c.classList.toggle('selected'));
-}
-
-async function populateBusStopSelects_() {
-  // ตอนลงทะเบียนนักเรียนยังไม่มี session (ticket-only) — ใช้รายการรถ/จุดจอดจากผู้รับรอง (ครู) ไม่ได้
-  // จึงให้กรอกรหัสรถ/จุดจอดเป็นข้อความอิสระผ่าน select ที่โหลดจาก me.buses ถ้ามี session ชั่วคราวไม่มี ก็ปล่อยว่างให้ผู้ดูแลเติมทีหลัง
-  const busSel = document.getElementById('s-busId');
-  const stopSel = document.getElementById('s-stopId');
-  busSel.innerHTML = '<option value="">— เลือกรถ —</option>';
-  stopSel.innerHTML = '<option value="">— เลือกจุดจอด —</option>';
 }
 
 onClickGuarded_('btn-submit-teacher', async () => {
@@ -509,17 +493,10 @@ onClickGuarded_('btn-submit-student', async () => {
     ticket: state.ticket,
     fullName: document.getElementById('s-fullName').value.trim(),
     nickname: document.getElementById('s-nickname').value.trim(),
-    classLevel: document.getElementById('s-classLevel').value.trim(),
-    room: document.getElementById('s-room').value.trim(),
-    guardianName: document.getElementById('s-guardianName').value.trim(),
-    guardianPhone: document.getElementById('s-guardianPhone').value.trim(),
-    busId: document.getElementById('s-busId').value,
-    stopId: document.getElementById('s-stopId').value,
-    rideAm: document.querySelector('.chip[data-ride="am"]').classList.contains('selected'),
-    ridePm: document.querySelector('.chip[data-ride="pm"]').classList.contains('selected'),
-    serviceDays: Array.from(document.querySelectorAll('#s-serviceDays .chip.selected')).map(c => c.dataset.day)
+    note: document.getElementById('s-note').value.trim(),
+    phone: document.getElementById('s-phone').value.trim()
   };
-  if (!payload.fullName || !payload.classLevel || !payload.room || !payload.guardianName || !payload.guardianPhone) {
+  if (!payload.fullName || !payload.phone) {
     toast('กรุณากรอกข้อมูลให้ครบถ้วน'); return;
   }
   const r = await api('reg.submitStudent', payload);
