@@ -317,7 +317,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ---------- S-04 list ---------- */
 .search-bar { margin: 10px 16px; }
 .search-bar input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
-.filter-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 8px; }
+.filter-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 12px 16px 8px; }
 .roster-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .roster-row .from-other { border-left: 4px solid var(--color-transfer); padding-left: 10px; margin-left: -14px; }
 .roster-row .name { font-weight: 700; }
@@ -344,7 +344,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ---------- ตัวบอกสถานะซิงค์ข้อมูล ---------- */
 .sync-indicator {
   font-size: 12px; color: var(--text-muted); text-align: right;
-  padding: 4px 16px 0; min-height: 16px; transition: background-color 0.4s ease;
+  padding: 12px 16px 0; min-height: 16px; transition: background-color 0.4s ease;
 }
 .sync-indicator:empty { display: none; }
 .sync-indicator.loading { color: var(--color-primary); }
