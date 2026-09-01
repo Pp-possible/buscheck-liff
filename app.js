@@ -300,13 +300,19 @@ async function boot() {
 
     applySession_(r.data);
     state.bootReady = true;
-    showScreen('S-01');
-    renderHome_({ silent: !!cachedHome });
 
-    if (state.pendingRoute) {
-      const route = state.pendingRoute;
-      state.pendingRoute = null;
-      navigateTile_(route);
+    if (state.persona === 'STUDENT') {
+      showScreen('S-21');
+      loadStudentHome_();
+    } else {
+      showScreen('S-01');
+      renderHome_({ silent: !!cachedHome });
+
+      if (state.pendingRoute) {
+        const route = state.pendingRoute;
+        state.pendingRoute = null;
+        navigateTile_(route);
+      }
     }
   } finally {
     window.__buscheckBootReady = true;
@@ -494,7 +500,7 @@ document.getElementById('btn-submit-student').addEventListener('click', async ()
 
 document.getElementById('btn-goto-home').addEventListener('click', () => {
   if (state.persona === 'STAFF') { showScreen('S-01'); renderHome_(); }
-  else { toast('โหมดนักเรียนเต็มรูปแบบจะเปิดให้ใช้งานในเฟสถัดไป'); }
+  else { showScreen('S-21'); loadStudentHome_(); }
 });
 
 // ---------------------------------------------------------------------------
@@ -1254,4 +1260,106 @@ document.getElementById('dlg-bus-save').addEventListener('click', async () => {
   document.getElementById('dlg-bus-edit').classList.remove('show');
   toast(busId ? 'บันทึกแล้ว' : 'เพิ่มรถสำเร็จ');
   loadBuses_({ silent: true });
+});
+
+// ---------------------------------------------------------------------------
+// S-21..S-24 โหมดนักเรียน (persona = STUDENT) — เฟส 4, 8.5
+// ---------------------------------------------------------------------------
+
+const DAY_STATUS_LABEL_ = {
+  PENDING: 'ยังไม่ขึ้น', ONBOARD: 'อยู่บนรถ', COMPLETED: 'ถึงแล้ว',
+  ABSENT: 'ขาด', EXCUSED: 'ไม่ใช้รถ', UNRESOLVED: 'ยังไม่ทราบสถานะ'
+};
+
+function renderStudentTodayRow_(label, row) {
+  if (!row) return '<div class="progress">' + label + ': ยังไม่มีรอบวันนี้</div>';
+  const statusText = DAY_STATUS_LABEL_[row.day_status] || row.day_status;
+  let detail = '';
+  if (row.day_status === 'ONBOARD' && row.board_at) detail = ' · ขึ้นรถ ' + row.board_at.slice(11, 16) + (row.board_by_name ? ' (' + row.board_by_name + ')' : '');
+  else if (row.day_status === 'COMPLETED' && row.drop_at) detail = ' · ถึง ' + row.drop_at.slice(11, 16) + (row.drop_by_name ? ' (' + row.drop_by_name + ')' : '');
+  return '<div class="row1"><span class="status-dot"></span> ' + label + ': ' + statusText + detail + '</div>';
+}
+
+async function loadStudentHome_(opts) {
+  opts = opts || {};
+  setSyncBadge_('s21-sync', 'loading');
+  const r = await api('student.myHome', {});
+  if (!r.ok) { toast(r.error.message); setSyncBadge_('s21-sync', 'error'); return; }
+
+  const d = r.data;
+  document.getElementById('s21-name').textContent = d.profile.nickname ? d.profile.name + ' (' + d.profile.nickname + ')' : d.profile.name;
+  document.getElementById('s21-class').textContent = [d.profile.class, d.bus ? d.bus.bus_name : ''].filter(Boolean).join(' · ');
+  document.getElementById('s21-sponsor').textContent = d.profile.registered_by_name ? 'เพิ่มโดย ' + d.profile.registered_by_name : '';
+  document.getElementById('s21-today').innerHTML = renderStudentTodayRow_('เช้า', d.today.am) + renderStudentTodayRow_('บ่าย', d.today.pm);
+
+  const qrCard = document.getElementById('s21-qr-card');
+  if (d.qrPayload) { qrCard.style.display = 'block'; renderQr_('s21-qr-canvas', d.qrPayload); }
+  else qrCard.style.display = 'none';
+
+  document.getElementById('s21-tile-noride').style.display = d.canSelfExcuse ? 'flex' : 'none';
+  state.studentCanSelfExcuse = d.canSelfExcuse;
+
+  setSyncBadge_('s21-sync', 'fresh', Date.now());
+}
+
+document.getElementById('btn-refresh-student-home').addEventListener('click', () => loadStudentHome_());
+document.getElementById('s21-tile-bus').addEventListener('click', () => { showScreen('S-22'); loadStudentBusInfo_(); });
+document.getElementById('s21-tile-noride').addEventListener('click', () => {
+  if (!state.studentCanSelfExcuse) { toast('โรงเรียนปิดการแจ้งไม่ใช้รถด้วยตนเองไว้ กรุณาติดต่อครูประจำรถ'); return; }
+  showScreen('S-23');
+  const todayStr = new Date().toISOString().slice(0, 10);
+  document.getElementById('s23-date-from').value = todayStr;
+  document.getElementById('s23-date-to').value = todayStr;
+  document.getElementById('s23-note').value = '';
+});
+document.getElementById('s21-tile-history').addEventListener('click', () => { showScreen('S-24'); loadStudentHistory_(); });
+
+async function loadStudentBusInfo_() {
+  const content = document.getElementById('s22-content');
+  content.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  const r = await api('student.myBusInfo', {});
+  if (!r.ok) { content.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
+
+  const d = r.data;
+  if (!d.bus) { content.innerHTML = '<div class="empty-state">ยังไม่มีรถประจำ</div>'; return; }
+  let html = '<div class="card"><div class="card-title">รถประจำ</div><div class="row1">' + d.bus.bus_name + '</div></div>';
+  if (d.stop) html += '<div class="card"><div class="card-title">จุดขึ้น-ลง</div><div class="row1">' + d.stop.stop_name + '</div></div>';
+  if (d.contacts.length) {
+    html += '<div class="card"><div class="card-title">ครูประจำรถ</div>' +
+      d.contacts.map(c => '<div class="row1">' + c.name + ' — <a href="tel:' + c.phone + '">' + c.phone + '</a></div>').join('') +
+      '</div>';
+  }
+  content.innerHTML = html;
+}
+
+async function loadStudentHistory_() {
+  const list = document.getElementById('s24-list');
+  list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  const r = await api('student.myHistory', {});
+  if (!r.ok) { list.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
+  if (!r.data.length) { list.innerHTML = '<div class="empty-state">ยังไม่มีประวัติการเดินทาง</div>'; return; }
+
+  list.innerHTML = r.data.map(h => {
+    const statusText = DAY_STATUS_LABEL_[h.day_status] || h.day_status;
+    const dirLabel = h.direction === 'AM' ? 'เช้า' : 'บ่าย';
+    return '<div class="round-item"><div class="round-item-content"><div class="row1">' +
+      h.date + ' · ' + dirLabel + ' — ' + statusText + '</div></div></div>';
+  }).join('');
+}
+
+document.getElementById('btn-submit-noride').addEventListener('click', async () => {
+  const dateFrom = document.getElementById('s23-date-from').value;
+  const dateTo = document.getElementById('s23-date-to').value;
+  if (!dateFrom || !dateTo) { toast('กรุณาระบุช่วงวันที่'); return; }
+
+  const r = await api('student.reportNoRide', {
+    dateFrom, dateTo,
+    direction: document.getElementById('s23-direction').value,
+    note: document.getElementById('s23-note').value.trim()
+  });
+  if (!r.ok) { toast(r.error.message); return; }
+
+  toast('แจ้งไม่ใช้รถแล้ว');
+  showScreen('S-21');
+  loadStudentHome_({ silent: true });
 });
