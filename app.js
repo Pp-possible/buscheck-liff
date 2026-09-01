@@ -5,8 +5,13 @@
 
 const CFG = window.BUSCHECK_CONFIG;
 
+// ไอคอน SVG (อ้างอิง <symbol> ที่นิยามไว้ใน index.html) — ใช้แทน emoji ทั้งหมด
+function ic(name, cls) {
+  return '<svg class="icon' + (cls ? ' ' + cls : '') + '"><use href="#i-' + name + '"></use></svg>';
+}
+
 // ต้องประกาศก่อน boot() เรียกใช้ (renderHomeFromData_ อาจถูกเรียกจาก boot() ทันทีถ้ามีแคชอยู่แล้ว)
-const TILE_ICONS = { scan: '📷', vouchQr: '🪪', myRounds: '🧾', manageBus: '🚌' };
+const TILE_ICONS = { scan: ic('camera'), vouchQr: ic('id-card'), myRounds: ic('list'), manageBus: ic('bus') };
 
 const state = {
   sessionToken: null,
@@ -51,10 +56,10 @@ function setSyncBadge_(elId, mode, ts) {
   const el = document.getElementById(elId);
   if (!el) return;
   el.classList.remove('loading');
-  if (mode === 'loading') { el.textContent = '🔄 กำลังอัปเดต...'; el.classList.add('loading'); }
-  else if (mode === 'cache') { el.textContent = '💾 ข้อมูลล่าสุดที่บันทึกไว้ — กำลังตรวจสอบใหม่'; }
-  else if (mode === 'fresh') { el.textContent = '✓ อัปเดตแล้ว ' + new Date(ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); flashSynced_(elId); }
-  else if (mode === 'error') { el.textContent = '⚠ อัปเดตไม่สำเร็จ — แตะ ⟳ เพื่อลองใหม่'; }
+  if (mode === 'loading') { el.innerHTML = ic('refresh', 'btn-refresh-spin') + ' กำลังอัปเดต...'; el.classList.add('loading'); }
+  else if (mode === 'cache') { el.innerHTML = ic('save') + ' ข้อมูลล่าสุดที่บันทึกไว้ — กำลังตรวจสอบใหม่'; }
+  else if (mode === 'fresh') { el.innerHTML = ic('check-circle', 'icon-ok') + ' อัปเดตแล้ว ' + new Date(ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); flashSynced_(elId); }
+  else if (mode === 'error') { el.innerHTML = ic('alert-triangle', 'icon-error') + ' อัปเดตไม่สำเร็จ — แตะปุ่มรีเฟรชเพื่อลองใหม่'; }
 }
 function flashSynced_(elId) {
   const el = document.getElementById(elId);
@@ -231,7 +236,7 @@ function updateOfflineBanner() {
   ['offline-banner', 'offline-banner-2'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (n > 0) { el.textContent = '⚠ ยังไม่ส่ง ' + n + ' รายการ (ออฟไลน์)'; el.classList.add('show'); }
+    if (n > 0) { el.innerHTML = ic('alert-triangle') + ' ยังไม่ส่ง ' + n + ' รายการ (ออฟไลน์)'; el.classList.add('show'); }
     else { el.classList.remove('show'); }
   });
 }
@@ -545,7 +550,7 @@ function renderHomeFromData_(data) {
   const tilesWrap = document.getElementById('s01-tiles');
   tilesWrap.innerHTML = data.tiles.map(t => (
     '<div class="tile" data-tile="' + t.key + '" data-route="' + (t.route || '') + '">' +
-    '<span class="emoji">' + (TILE_ICONS[t.key] || '🔹') + '</span>' +
+    '<span class="icon-wrap">' + (TILE_ICONS[t.key] || ic('list')) + '</span>' +
     '<span class="label">' + t.label + '</span>' +
     (t.badge ? '<span class="badge">' + t.badge + '</span>' : '') +
     '</div>'
@@ -611,7 +616,7 @@ function renderRoundsList_(rounds) {
   list.innerHTML = rounds.map(round => {
     const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
     const statusLabel = round.status === 'OPEN' ? 'เปิดอยู่' : round.status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
-    const checkers = round.checkers.map(c => c.name).join(' + ') || 'ยังไม่มอบหมายผู้เช็ค ⚠';
+    const checkers = round.checkers.map(c => c.name).join(' + ') || ('ยังไม่มอบหมายผู้เช็ค ' + ic('alert-triangle', 'icon-amber'));
     const isPlanned = round.status === 'PLANNED';
     const busLabel = (state.busMap && state.busMap[round.scope_id]) || round.scope_id || '';
     const typeLabel = ROUND_TYPE_LABELS_[round.round_type] || round.round_type;
@@ -627,7 +632,7 @@ function renderRoundsList_(rounds) {
     html += '<div class="row1"><span class="status-dot"></span> ' + round.seq + '. ' + round.round_name + ' — ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
       '<div class="progress">' + formatThaiDateTime_(round.scheduled_at) + ' · ' + typeLabel + ' · ' + busLabel + '</div>' +
       '<div class="progress">' + checkers + '</div>' +
-      (round.duplicateAttempts > 0 ? '<div class="warn">⚠ มีการเช็คซ้ำ ' + round.duplicateAttempts + ' ครั้ง</div>' : '') +
+      (round.duplicateAttempts > 0 ? '<div class="warn">' + ic('alert-triangle') + ' มีการเช็คซ้ำ ' + round.duplicateAttempts + ' ครั้ง</div>' : '') +
       (isPlanned ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
       (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
       (isPlanned && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
@@ -885,15 +890,15 @@ function addFeedItem_(result) {
   const feed = document.getElementById('s03-feed');
   const cls = result.result === 'OK' ? 'ok' : result.result === 'MOVED_FROM_OTHER_BUS' ? 'transfer' :
     result.result === 'DUPLICATE_IN_ROUND' ? 'duplicate' : 'error';
-  const icon = cls === 'ok' ? '✅' : cls === 'transfer' ? '🔵' : cls === 'duplicate' ? '⚠️' : '❌';
+  const icon = cls === 'ok' ? ic('check-circle', 'icon-ok') : cls === 'transfer' ? ic('transfer') : cls === 'duplicate' ? ic('alert-triangle', 'icon-amber') : ic('x-circle', 'icon-error');
   const name = result.student ? (result.student.nickname || result.student.name) + ' (' + result.student.name + ')' : '';
   const sub = result.student ? result.student.class : '';
   const div = document.createElement('div');
   div.className = 'scan-feed-item ' + cls;
-  div.innerHTML = '<span class="icon">' + icon + '</span>' +
+  div.innerHTML = '<span class="feed-icon">' + icon + '</span>' +
     '<div><div class="name">' + (name || result.message) + '</div>' +
     '<div class="sub">' + (name ? (sub + ' · ' + (result.message || '')) : '') + '</div>' +
-    (result.student && result.student.medical_note ? '<div class="medical">🟠 ' + result.student.medical_note + '</div>' : '') +
+    (result.student && result.student.medical_note ? '<div class="medical">' + ic('alert-triangle', 'icon-amber') + ' ' + result.student.medical_note + '</div>' : '') +
     '</div>';
   feed.insertBefore(div, feed.firstChild);
 }
@@ -1096,7 +1101,7 @@ function showManageBlockersUI_(blockers) {
   const existing = wrap.querySelector('.blocker-list'); if (existing) existing.remove();
   const div = document.createElement('div');
   div.className = 'blocker-list';
-  div.innerHTML = '<p style="color:var(--color-error);font-weight:700;">⛔ ปิดรอบไม่ได้ — ยังมี ' + blockers.length + ' คนที่ยังไม่ระบุสถานะ</p>' +
+  div.innerHTML = '<p style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ปิดรอบไม่ได้ — ยังมี ' + blockers.length + ' คนที่ยังไม่ระบุสถานะ</p>' +
     blockers.map(b => (
       '<div class="roster-row"><div class="name">' + b.name + '</div></div>' +
       '<div class="chip-group" style="margin:0 0 10px;">' +
@@ -1143,8 +1148,9 @@ async function refreshVouchTokens_() {
   if (!r.ok) { toast(r.error.message); return; }
   state.vouchTickets = r.data.tokens;
   state.vouchTicketIdx = 0;
-  const scope = (r.data.canVouch.teacher ? 'ครู ✅' : 'ครู ❌') + ' · ' + (r.data.canVouch.student ? 'นักเรียน ✅' : 'นักเรียน ❌');
-  document.getElementById('s19-scope').textContent = 'QR นี้รับรองได้: ' + scope;
+  const scope = 'ครู ' + (r.data.canVouch.teacher ? ic('check-circle', 'icon-ok') : ic('x-circle', 'icon-error')) +
+    ' · นักเรียน ' + (r.data.canVouch.student ? ic('check-circle', 'icon-ok') : ic('x-circle', 'icon-error'));
+  document.getElementById('s19-scope').innerHTML = 'QR นี้รับรองได้: ' + scope;
   document.getElementById('s19-usedtoday').textContent = 'วันนี้รับรองไปแล้ว ' + r.data.usedToday + ' คน' + (r.data.dailyLimit ? ' / ' + r.data.dailyLimit : ' (ไม่จำกัด)');
 }
 
@@ -1156,7 +1162,7 @@ function tickVouchQr_() {
   state.vouchTicketIdx = idx;
   const tokenObj = state.vouchTickets[idx];
   const left = Math.max(0, Math.round((new Date(tokenObj.validTo).getTime() - now) / 1000));
-  document.getElementById('s19-countdown').textContent = '⟳ เปลี่ยนใหม่ใน ' + left + ' วินาที';
+  document.getElementById('s19-countdown').innerHTML = ic('refresh') + ' เปลี่ยนใหม่ใน ' + left + ' วินาที';
   renderQr_('s19-qr-canvas', tokenObj.payload);
 
   if (idx >= state.vouchTickets.length - 2 && left < 60) refreshVouchTokens_();
@@ -1197,7 +1203,7 @@ function renderBusList_(buses) {
   list.innerHTML = buses.map(b => (
     '<div class="roster-row" style="opacity:' + (b.is_active ? '1' : '0.45') + '">' +
     '<div style="flex:1">' +
-    '<div class="name">🚌 รถ ' + b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</div>' +
+    '<div class="name">' + ic('bus') + ' รถ ' + b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</div>' +
     '<div class="meta">' +
     (b.plate_no ? 'ทะเบียน ' + b.plate_no + ' · ' : '') +
     'จุ ' + (b.capacity || '—') + ' คน' +
@@ -1207,7 +1213,7 @@ function renderBusList_(buses) {
     (b.note ? '<div class="meta" style="color:var(--text-muted)">' + b.note + '</div>' : '') +
     '</div>' +
     '<div style="display:flex;gap:6px;flex-shrink:0">' +
-    '<button class="btn btn-secondary" style="min-height:36px;padding:6px 10px;" data-bus-edit="' + b.bus_id + '">✏️</button>' +
+    '<button class="btn btn-secondary" style="min-height:36px;padding:6px 10px;" data-bus-edit="' + b.bus_id + '" aria-label="แก้ไขรถ ' + b.bus_code + '" title="แก้ไข">' + ic('pencil') + '</button>' +
     '<button class="btn ' + (b.is_active ? 'btn-danger' : 'btn-secondary') + '" style="min-height:36px;padding:6px 10px;font-size:13px;" data-bus-toggle="' + b.bus_id + '" data-bus-active="' + b.is_active + '">' + (b.is_active ? 'ปิด' : 'เปิด') + '</button>' +
     '</div>' +
     '</div>'

@@ -36,6 +36,18 @@
 
 * { box-sizing: border-box; }
 
+/* ---------- Icons (SVG sprite, see index.html <symbol> defs) ---------- */
+.icon {
+  width: 1em; height: 1em; display: inline-block; flex-shrink: 0;
+  vertical-align: -0.15em;
+  fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.icon-amber { color: var(--color-drop); }
+.icon-error { color: var(--color-error); }
+.icon-ok { color: var(--color-board); }
+.icon-muted { color: var(--text-muted); }
+
 html, body {
   margin: 0; padding: 0; height: 100%;
   background: var(--bg); color: var(--text);
@@ -89,7 +101,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   border-radius: 14px; border: 1px solid var(--border); background: var(--card-bg);
   text-align: left; cursor: pointer; box-shadow: var(--shadow);
 }
-.choice-btn .emoji { font-size: 28px; margin-right: 10px; }
+.choice-btn .icon-wrap { font-size: 28px; margin-right: 10px; }
 .choice-btn .label { font-weight: 700; font-size: 16px; }
 .choice-btn .hint { display: block; color: var(--text-muted); font-size: 13px; margin-top: 2px; }
 
@@ -136,7 +148,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
   padding: 14px 8px; text-align: center; box-shadow: var(--shadow); cursor: pointer; position: relative;
 }
-.tile .emoji { font-size: 26px; }
+.tile .icon-wrap { font-size: 26px; }
 .tile .label { display: block; font-size: 13px; font-weight: 600; margin-top: 6px; }
 .tile .badge {
   position: absolute; top: 6px; right: 6px; background: var(--color-error); color: #fff;
@@ -196,7 +208,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .scan-feed-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border);
 }
-.scan-feed-item .icon { font-size: 22px; }
+.scan-feed-item .feed-icon { font-size: 22px; }
 .scan-feed-item .name { font-weight: 700; }
 .scan-feed-item .sub { font-size: 12px; color: var(--text-muted); }
 .scan-feed-item.ok { background: rgba(39,174,96,0.08); }

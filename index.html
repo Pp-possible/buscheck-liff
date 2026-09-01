@@ -44,6 +44,116 @@
 </script>
 </head>
 <body>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-bus" viewBox="0 0 24 24">
+    <rect x="3" y="6" width="18" height="11" rx="2"/>
+    <path d="M3 13h18"/>
+    <circle cx="7.5" cy="19.5" r="1.5"/>
+    <circle cx="16.5" cy="19.5" r="1.5"/>
+    <path d="M6 6V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v2"/>
+  </symbol>
+  <symbol id="i-user" viewBox="0 0 24 24">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
+  </symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24">
+    <rect x="3" y="8" width="18" height="12" rx="2"/>
+    <path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <path d="M3 13h18"/>
+  </symbol>
+  <symbol id="i-graduation-cap" viewBox="0 0 24 24">
+    <path d="M12 4L2 9l10 5 10-5-10-5z"/>
+    <path d="M6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/>
+    <path d="M22 9v6"/>
+  </symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24">
+    <path d="M9 18h6"/>
+    <path d="M10 21h4"/>
+    <path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.9v.2h5v-.2c0-.8.4-1.5 1-1.9A6 6 0 0 0 12 3z"/>
+  </symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M8 12.5l2.5 2.5L16 9.5"/>
+  </symbol>
+  <symbol id="i-x-circle" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M9 9l6 6M15 9l-6 6"/>
+  </symbol>
+  <symbol id="i-alert-triangle" viewBox="0 0 24 24">
+    <path d="M12 4L2.5 20h19L12 4z"/>
+    <path d="M12 10v4.5"/>
+    <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-alert-octagon" viewBox="0 0 24 24">
+    <path d="M8 3h8l5 5v8l-5 5H8l-5-5V8l5-5z"/>
+    <path d="M12 8v5"/>
+    <circle cx="12" cy="16.2" r="1" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24">
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+    <path d="M21 3v5h-5"/>
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+    <path d="M3 21v-5h5"/>
+  </symbol>
+  <symbol id="i-save" viewBox="0 0 24 24">
+    <path d="M5 3h11l4 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
+    <path d="M8 3v5h8V3"/>
+    <rect x="7" y="13" width="10" height="7"/>
+  </symbol>
+  <symbol id="i-log-out" viewBox="0 0 24 24">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <path d="M16 17l5-5-5-5"/>
+    <path d="M21 12H9"/>
+  </symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24">
+    <path d="M12 19V5"/>
+    <path d="M6 11l6-6 6 6"/>
+  </symbol>
+  <symbol id="i-arrow-down" viewBox="0 0 24 24">
+    <path d="M12 5v14"/>
+    <path d="M18 13l-6 6-6-6"/>
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24">
+    <circle cx="11" cy="11" r="7"/>
+    <path d="M21 21l-4.3-4.3"/>
+  </symbol>
+  <symbol id="i-list" viewBox="0 0 24 24">
+    <path d="M8 6h13"/>
+    <path d="M8 12h13"/>
+    <path d="M8 18h13"/>
+    <circle cx="3.5" cy="6" r="1" fill="currentColor" stroke="none"/>
+    <circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none"/>
+    <circle cx="3.5" cy="18" r="1" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24">
+    <rect x="3" y="5" width="18" height="16" rx="2"/>
+    <path d="M16 3v4M8 3v4M3 10h18"/>
+  </symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M12 7v5l3.5 2"/>
+  </symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24">
+    <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/>
+    <circle cx="12" cy="14" r="3.5"/>
+  </symbol>
+  <symbol id="i-id-card" viewBox="0 0 24 24">
+    <rect x="2" y="5" width="20" height="14" rx="2"/>
+    <circle cx="8" cy="12" r="2.2"/>
+    <path d="M5.5 16.5c.5-1.8 1.8-2.5 2.5-2.5s2 .7 2.5 2.5"/>
+    <path d="M14 10h6M14 13h6M14 16h4"/>
+  </symbol>
+  <symbol id="i-transfer" viewBox="0 0 24 24">
+    <path d="M7 7h13"/>
+    <path d="M17 3l3 4-3 4"/>
+    <path d="M17 17H4"/>
+    <path d="M7 13l-3 4 3 4"/>
+  </symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24">
+    <path d="M4 20l1-4L16 5l3 3L8 19l-4 1z"/>
+    <path d="M13 8l3 3"/>
+  </symbol>
+</svg>
 <div id="debug-panel" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font-size:12px;line-height:1.5;padding:10px;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;"></div>
 <div id="app">
 
@@ -52,18 +162,18 @@
   <!-- ============ S-00a เลือกประเภท ============ -->
   <section class="screen" data-screen="S-00a">
     <div class="hero">
-      <div style="font-size:40px;">🚌</div>
+      <div style="font-size:40px;"><svg class="icon"><use href="#i-bus"/></svg></div>
       <h1>BusCheck</h1>
       <p>ระบบเช็คยอดนักเรียนบนรถ</p>
       <p id="s00a-hint">ยังไม่พบบัญชีของคุณในระบบ<br>กรุณาเลือกประเภทการลงทะเบียน</p>
     </div>
     <button class="choice-btn" id="btn-reg-teacher" style="display:none">
-      <span class="emoji">👨‍🏫</span>
+      <span class="icon-wrap"><svg class="icon"><use href="#i-briefcase"/></svg></span>
       <span class="label">ลงทะเบียนเป็นครู/เจ้าหน้าที่</span>
       <span class="hint">ต้องสแกน QR ของผู้ดูแลระบบสูงสุด</span>
     </button>
     <button class="choice-btn" id="btn-reg-student" style="display:none">
-      <span class="emoji">🎒</span>
+      <span class="icon-wrap"><svg class="icon"><use href="#i-graduation-cap"/></svg></span>
       <span class="label">ลงทะเบียนเป็นนักเรียน</span>
       <span class="hint">ต้องสแกน QR ของครู</span>
     </button>
@@ -78,7 +188,7 @@
     <div class="card">
       <p id="s00b-instruction" style="margin:0 0 12px;color:var(--text-muted)"></p>
       <div id="qr-reader-vouch" style="border-radius:14px;overflow:hidden;background:#000;min-height:260px;"></div>
-      <p style="font-size:13px;color:var(--text-muted);margin-top:12px;">💡 QR เปลี่ยนใหม่ทุก 20 วินาที ถ้าสแกนไม่ทัน ให้ผู้รับรองกดสร้างใหม่</p>
+      <p style="font-size:13px;color:var(--text-muted);margin-top:12px;"><svg class="icon"><use href="#i-bulb"/></svg> QR เปลี่ยนใหม่ทุก 20 วินาที ถ้าสแกนไม่ทัน ให้ผู้รับรองกดสร้างใหม่</p>
     </div>
   </section>
 
@@ -89,7 +199,7 @@
       <div class="title">กรอกข้อมูล</div>
     </div>
     <div class="card" id="s00c-sponsor-card">
-      <div class="card-title">✅ ยืนยันผู้รับรองแล้ว</div>
+      <div class="card-title"><svg class="icon icon-ok"><use href="#i-check-circle"/></svg> ยืนยันผู้รับรองแล้ว</div>
       <div id="s00c-sponsor-name" style="font-weight:700"></div>
       <div id="s00c-sponsor-role" style="color:var(--text-muted);font-size:13px"></div>
       <div id="s00c-countdown" style="margin-top:8px;font-weight:600;color:var(--color-primary)"></div>
@@ -147,12 +257,12 @@
   <section class="screen" data-screen="S-01">
     <div class="topbar">
       <div class="title">BusCheck</div>
-      <button class="back" id="btn-refresh-home" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
-      <button class="back" id="btn-logout" title="ออกจากระบบ" aria-label="ออกจากระบบ">⎋</button>
+      <button class="back" id="btn-refresh-home" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
+      <button class="back" id="btn-logout" title="ออกจากระบบ" aria-label="ออกจากระบบ"><svg class="icon"><use href="#i-log-out"/></svg></button>
     </div>
     <div class="sync-indicator" id="s01-sync"></div>
     <div class="card profile-card">
-      <div class="profile-avatar" id="s01-avatar">👤</div>
+      <div class="profile-avatar" id="s01-avatar"><svg class="icon"><use href="#i-user"/></svg></div>
       <div class="profile-info">
         <div class="name" id="s01-name"></div>
         <div class="role" id="s01-role"></div>
@@ -168,7 +278,7 @@
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
       <div class="title">รอบเช็ควันนี้</div>
-      <button class="back" id="btn-refresh-rounds" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-rounds" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s02-sync"></div>
     <div id="s02-list"></div>
@@ -188,17 +298,17 @@
       <div class="count-box"><div class="num" id="s03-count-remaining">0</div><div class="label">ยังไม่เช็ค</div></div>
     </div>
     <div class="mode-toggle">
-      <button id="s03-mode-board" class="active board">⇧ ขึ้นรถ</button>
-      <button id="s03-mode-drop" class="drop">⇩ ลงรถ</button>
+      <button id="s03-mode-board" class="active board"><svg class="icon"><use href="#i-arrow-up"/></svg> ขึ้นรถ</button>
+      <button id="s03-mode-drop" class="drop"><svg class="icon"><use href="#i-arrow-down"/></svg> ลงรถ</button>
     </div>
     <div id="qr-reader"></div>
     <div class="field" style="margin-top:10px;">
-      <input id="s03-search" type="text" placeholder="🔍 ค้นหาชื่อ/รหัสนักเรียน (บัตรหาย/QR เสีย)">
+      <input id="s03-search" type="text" placeholder="ค้นหาชื่อ/รหัสนักเรียน (บัตรหาย/QR เสีย)">
     </div>
     <div id="s03-search-results"></div>
     <div class="scan-feed" id="s03-feed"></div>
     <div class="bottom-actions">
-      <button class="btn btn-secondary" id="btn-goto-s04">☰ รายชื่อ</button>
+      <button class="btn btn-secondary" id="btn-goto-s04"><svg class="icon"><use href="#i-list"/></svg> รายชื่อ</button>
       <button class="btn btn-primary" id="btn-goto-s05">ปิดรอบ/เที่ยว →</button>
     </div>
   </section>
@@ -208,7 +318,7 @@
     <div class="topbar">
       <button class="back" data-back="S-03" aria-label="ย้อนกลับ">←</button>
       <div class="title">รายชื่อนักเรียน</div>
-      <button class="back" id="btn-refresh-roster" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-roster" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s04-sync"></div>
     <div class="search-bar"><input id="s04-search" type="text" placeholder="ค้นหาชื่อ/ชื่อเล่น/รหัส"></div>
@@ -228,7 +338,7 @@
     <div class="topbar">
       <button class="back" data-back="S-03" aria-label="ย้อนกลับ">←</button>
       <div class="title">ปิดรอบ / ปิดเที่ยวรถ</div>
-      <button class="back" id="btn-refresh-close" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-close" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s05-sync"></div>
     <div class="card" id="s05-round-card">
@@ -252,7 +362,7 @@
     </div>
     <div class="qr-wrap">
       <div class="qr-box"><div id="s19-qr-canvas"></div></div>
-      <div class="qr-countdown" id="s19-countdown">⟳ --</div>
+      <div class="qr-countdown" id="s19-countdown"><svg class="icon"><use href="#i-refresh"/></svg> --</div>
       <div style="display:flex;gap:10px;margin-top:16px;">
         <button class="btn btn-secondary" id="btn-vouch-new">สร้างใหม่</button>
         <button class="btn btn-danger" id="btn-vouch-revoke-all">ยกเลิก QR ทั้งชุด</button>
@@ -261,7 +371,7 @@
     <div class="card">
       <div id="s19-scope"></div>
       <div id="s19-usedtoday" style="margin-top:6px;color:var(--text-muted)"></div>
-      <p style="color:var(--color-error);font-size:13px;margin-top:10px;">⚠ ให้สแกนต่อหน้าคุณเท่านั้น อย่าส่งภาพ QR นี้ให้ใคร</p>
+      <p style="color:var(--color-error);font-size:13px;margin-top:10px;"><svg class="icon"><use href="#i-alert-triangle"/></svg> ให้สแกนต่อหน้าคุณเท่านั้น อย่าส่งภาพ QR นี้ให้ใคร</p>
     </div>
     <div class="card">
       <div class="card-title">รายการที่ฉันรับรอง</div>
@@ -274,7 +384,7 @@
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
       <div class="title">จัดการรถ</div>
-      <button class="back" id="btn-refresh-buses" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-buses" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s20-sync"></div>
     <div style="padding:12px 16px;">
@@ -287,11 +397,11 @@
   <section class="screen" data-screen="S-21">
     <div class="topbar">
       <div class="title">BusCheck</div>
-      <button class="back" id="btn-refresh-student-home" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-student-home" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s21-sync"></div>
     <div class="card" style="display:flex;align-items:center;gap:12px;">
-      <div style="font-size:32px;">🧒</div>
+      <div style="font-size:32px;"><svg class="icon"><use href="#i-user"/></svg></div>
       <div>
         <div style="font-weight:700;font-size:17px;" id="s21-name"></div>
         <div style="color:var(--text-muted);font-size:13px;" id="s21-class"></div>
@@ -308,9 +418,9 @@
       <p style="color:var(--text-muted);font-size:13px;margin-top:8px;">ให้ครูสแกนตอนขึ้น-ลงรถ</p>
     </div>
     <div class="tiles-grid">
-      <div class="tile" id="s21-tile-bus"><span class="emoji">🚌</span><span class="label">รถและป้าย</span></div>
-      <div class="tile" id="s21-tile-noride"><span class="emoji">📅</span><span class="label">แจ้งไม่ใช้รถ</span></div>
-      <div class="tile" id="s21-tile-history"><span class="emoji">🕘</span><span class="label">ประวัติ</span></div>
+      <div class="tile" id="s21-tile-bus"><span class="icon-wrap"><svg class="icon"><use href="#i-bus"/></svg></span><span class="label">รถและป้าย</span></div>
+      <div class="tile" id="s21-tile-noride"><span class="icon-wrap"><svg class="icon"><use href="#i-calendar"/></svg></span><span class="label">แจ้งไม่ใช้รถ</span></div>
+      <div class="tile" id="s21-tile-history"><span class="icon-wrap"><svg class="icon"><use href="#i-clock"/></svg></span><span class="label">ประวัติ</span></div>
     </div>
   </section>
 
@@ -371,7 +481,7 @@
 <!-- ============ Dialog: เช็คซ้ำ ============ -->
 <div class="overlay" id="dlg-duplicate">
   <div class="dialog">
-    <h3>⚠️ เช็คไปแล้วในรอบนี้</h3>
+    <h3><svg class="icon"><use href="#i-alert-triangle"/></svg> เช็คไปแล้วในรอบนี้</h3>
     <p id="dlg-duplicate-body"></p>
     <div class="dialog-actions">
       <button class="btn btn-secondary" id="dlg-duplicate-ack">รับทราบ</button>
