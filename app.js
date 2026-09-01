@@ -6,7 +6,7 @@
 const CFG = window.BUSCHECK_CONFIG;
 
 // ต้องประกาศก่อน boot() เรียกใช้ (renderHomeFromData_ อาจถูกเรียกจาก boot() ทันทีถ้ามีแคชอยู่แล้ว)
-const TILE_ICONS = { scan: '📷', vouchQr: '🪪', myRounds: '🧾' };
+const TILE_ICONS = { scan: '📷', vouchQr: '🪪', myRounds: '🧾', manageBus: '🚌' };
 
 const state = {
   sessionToken: null,
@@ -509,6 +509,7 @@ function renderHomeFromData_(data) {
 function navigateTile_(route) {
   if (route === 'S-02') { showScreen('S-02'); loadRounds_(); }
   else if (route === 'S-19') { showScreen('S-19'); startVouchQrLoop_(); }
+  else if (route === 'S-20') { showScreen('S-20'); loadBuses_(); }
 }
 
 async function renderHome_(opts) {
@@ -1043,3 +1044,107 @@ async function renderVouchesList_() {
     if (rr.ok) { toast('ระงับบัญชีแล้ว'); renderVouchesList_(); } else toast(rr.error.message);
   }));
 }
+
+// ---------------------------------------------------------------------------
+// S-20 จัดการรถ
+// ---------------------------------------------------------------------------
+
+function renderBusList_(buses) {
+  const list = document.getElementById('s20-list');
+  if (!buses.length) { list.innerHTML = '<div class="empty-state">ยังไม่มีรถในระบบ</div>'; return; }
+  list.innerHTML = buses.map(b => (
+    '<div class="roster-row" style="opacity:' + (b.is_active ? '1' : '0.45') + '">' +
+    '<div style="flex:1">' +
+    '<div class="name">🚌 รถ ' + b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</div>' +
+    '<div class="meta">' +
+    (b.license_plate ? 'ทะเบียน ' + b.license_plate + ' · ' : '') +
+    'จุ ' + (b.capacity || '—') + ' คน' +
+    ' · นักเรียน ' + b.student_count + ' คน' +
+    (b.is_active ? '' : ' · ปิดใช้งาน') +
+    '</div>' +
+    (b.note ? '<div class="meta" style="color:var(--text-muted)">' + b.note + '</div>' : '') +
+    '</div>' +
+    '<div style="display:flex;gap:6px;flex-shrink:0">' +
+    '<button class="btn btn-secondary" style="min-height:36px;padding:6px 10px;" data-bus-edit="' + b.bus_id + '">✏️</button>' +
+    '<button class="btn ' + (b.is_active ? 'btn-danger' : 'btn-secondary') + '" style="min-height:36px;padding:6px 10px;font-size:13px;" data-bus-toggle="' + b.bus_id + '" data-bus-active="' + b.is_active + '">' + (b.is_active ? 'ปิด' : 'เปิด') + '</button>' +
+    '</div>' +
+    '</div>'
+  )).join('');
+
+  list.querySelectorAll('[data-bus-edit]').forEach(btn => btn.addEventListener('click', () => {
+    const bus = buses.find(b => b.bus_id === btn.dataset.busEdit);
+    if (bus) openBusDialog_(bus);
+  }));
+
+  list.querySelectorAll('[data-bus-toggle]').forEach(btn => btn.addEventListener('click', async () => {
+    const busId = btn.dataset.busToggle;
+    const currently = btn.dataset.busActive === 'true';
+    const bus = buses.find(b => b.bus_id === busId);
+    const busLabel = bus ? 'รถ ' + bus.bus_code : busId;
+    if (currently && !confirm('ปิดใช้งาน ' + busLabel + '?\nรถที่ปิดจะไม่แสดงในรายการเลือกรถสำหรับรอบเช็คใหม่')) return;
+    const r = await api('bus.setActive', { busId, active: !currently });
+    if (r.ok) { toast(currently ? 'ปิดใช้งานแล้ว' : 'เปิดใช้งานแล้ว'); loadBuses_({ silent: true }); }
+    else toast(r.error.message);
+  }));
+}
+
+async function loadBuses_(opts) {
+  opts = opts || {};
+  const cached = cacheGet_('buses');
+  if (cached && !opts.silent) {
+    renderBusList_(cached.data);
+    setSyncBadge_('s20-sync', 'cache', cached.cachedAt);
+  }
+  setSyncBadge_('s20-sync', 'loading');
+  spinRefreshBtn_('btn-refresh-buses', true);
+
+  const r = await api('bus.list', {});
+  spinRefreshBtn_('btn-refresh-buses', false);
+  if (!r.ok) {
+    if (!cached) document.getElementById('s20-list').innerHTML = '<div class="empty-state">' + r.error.message + '</div>';
+    setSyncBadge_('s20-sync', 'error');
+    return;
+  }
+
+  cacheSet_('buses', r.data);
+  renderBusList_(r.data);
+  setSyncBadge_('s20-sync', 'fresh', Date.now());
+}
+
+function openBusDialog_(bus) {
+  const isEdit = !!bus;
+  document.getElementById('dlg-bus-title').textContent = isEdit ? 'แก้ไขรถ ' + bus.bus_code : 'เพิ่มรถใหม่';
+  document.getElementById('be-bus-id').value = isEdit ? bus.bus_id : '';
+  document.getElementById('be-code').value = isEdit ? bus.bus_code : '';
+  document.getElementById('be-name').value = isEdit ? (bus.bus_name && bus.bus_name !== bus.bus_code ? bus.bus_name : '') : '';
+  document.getElementById('be-plate').value = isEdit ? (bus.license_plate || '') : '';
+  document.getElementById('be-cap').value = isEdit ? (bus.capacity || '') : '';
+  document.getElementById('be-note').value = isEdit ? (bus.note || '') : '';
+  document.getElementById('be-order').value = isEdit ? (bus.sort_order != null ? bus.sort_order : '') : '';
+  document.getElementById('dlg-bus-edit').classList.add('show');
+}
+
+document.getElementById('btn-add-bus').addEventListener('click', () => openBusDialog_(null));
+document.getElementById('btn-refresh-buses').addEventListener('click', () => loadBuses_());
+document.getElementById('dlg-bus-cancel').addEventListener('click', () => document.getElementById('dlg-bus-edit').classList.remove('show'));
+
+document.getElementById('dlg-bus-save').addEventListener('click', async () => {
+  const busCode = document.getElementById('be-code').value.trim();
+  if (!busCode) { toast('กรุณาระบุหมายเลข/ชื่อรถ'); return; }
+  const busId = document.getElementById('be-bus-id').value;
+  const payload = {
+    busCode,
+    busName: document.getElementById('be-name').value.trim(),
+    licensePlate: document.getElementById('be-plate').value.trim(),
+    capacity: document.getElementById('be-cap').value,
+    note: document.getElementById('be-note').value.trim(),
+    sortOrder: document.getElementById('be-order').value
+  };
+  if (busId) payload.busId = busId;
+
+  const r = await api('bus.upsert', payload);
+  if (!r.ok) { toast(r.error.message); return; }
+  document.getElementById('dlg-bus-edit').classList.remove('show');
+  toast(busId ? 'บันทึกแล้ว' : 'เพิ่มรถสำเร็จ');
+  loadBuses_({ silent: true });
+});

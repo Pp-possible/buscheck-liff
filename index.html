@@ -269,6 +269,20 @@
     </div>
   </section>
 
+  <!-- ============ S-20 จัดการรถ ============ -->
+  <section class="screen" data-screen="S-20">
+    <div class="topbar">
+      <button class="back" data-back="S-01">←</button>
+      <div class="title">จัดการรถ</div>
+      <button class="back" id="btn-refresh-buses" title="รีเฟรช">⟳</button>
+    </div>
+    <div class="sync-indicator" id="s20-sync"></div>
+    <div style="padding:12px 16px;">
+      <button class="btn btn-primary btn-block" id="btn-add-bus">+ เพิ่มรถใหม่</button>
+    </div>
+    <div id="s20-list"></div>
+  </section>
+
 </div>
 
 <!-- ============ Dialog: ยืนยันย้ายรถ / เปิดสถานะใหม่ ============ -->
@@ -334,6 +348,42 @@
     <div class="dialog-actions">
       <button class="btn btn-secondary" id="dlg-create-round-cancel">ยกเลิก</button>
       <button class="btn btn-primary" id="dlg-create-round-submit">สร้างรอบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Dialog: เพิ่ม/แก้ไขรถ ============ -->
+<div class="overlay" id="dlg-bus-edit">
+  <div class="dialog">
+    <h3 id="dlg-bus-title">เพิ่มรถใหม่</h3>
+    <div class="field" style="margin:0 0 10px;">
+      <label>หมายเลข/ชื่อรถ *</label>
+      <input id="be-code" type="text" placeholder="เช่น 1, A, สาย1">
+    </div>
+    <div class="field" style="margin:0 0 10px;">
+      <label>ชื่อแสดงผล</label>
+      <input id="be-name" type="text" placeholder="เช่น รถ 1 (ถ้าว่างใช้หมายเลข/ชื่อรถแทน)">
+    </div>
+    <div class="field" style="margin:0 0 10px;">
+      <label>ป้ายทะเบียน</label>
+      <input id="be-plate" type="text" placeholder="เช่น กข 1234">
+    </div>
+    <div class="field" style="margin:0 0 10px;">
+      <label>ความจุ (คน)</label>
+      <input id="be-cap" type="number" min="0" placeholder="เช่น 40">
+    </div>
+    <div class="field" style="margin:0 0 10px;">
+      <label>หมายเหตุ</label>
+      <input id="be-note" type="text" placeholder="(ถ้ามี)">
+    </div>
+    <div class="field" style="margin:0 0 10px;">
+      <label>ลำดับการแสดง</label>
+      <input id="be-order" type="number" min="0" placeholder="เช่น 1">
+    </div>
+    <input type="hidden" id="be-bus-id">
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="dlg-bus-cancel">ยกเลิก</button>
+      <button class="btn btn-primary" id="dlg-bus-save">บันทึก</button>
     </div>
   </div>
 </div>
