@@ -601,8 +601,9 @@ async function openCreateRoundDialog_() {
   document.getElementById('dlg-create-round').classList.add('show');
 
   const r = await api('me.buses', {});
-  const buses = r.ok ? r.data : [];
-  busSel.innerHTML = buses.map(b => '<option value="' + b.bus_id + '">' + b.bus_code + '</option>').join('') || '<option value="">(ไม่มีรถในขอบเขตของคุณ)</option>';
+  if (!r.ok) { toast('โหลดรายการรถไม่ได้: ' + r.error.message); busSel.innerHTML = '<option value="">(โหลดไม่สำเร็จ)</option>'; return; }
+  const buses = r.data || [];
+  busSel.innerHTML = buses.map(b => '<option value="' + b.bus_id + '">' + b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</option>').join('') || '<option value="">(ไม่มีรถในขอบเขตของคุณ)</option>';
 }
 
 document.getElementById('dlg-create-round-submit').addEventListener('click', async () => {
