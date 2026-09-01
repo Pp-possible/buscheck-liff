@@ -526,6 +526,9 @@ function renderHomeFromData_(data) {
   document.getElementById('s01-role').textContent = data.profile.role || '';
   document.getElementById('s01-sponsor').textContent = data.profile.registered_by_name
     ? 'เพิ่มโดย ' + data.profile.registered_by_name : '';
+  document.getElementById('s01-avatar').innerHTML = data.profile.picture
+    ? '<img src="' + data.profile.picture + '" alt="">'
+    : '<svg class="icon"><use href="#i-user"/></svg>';
 
   const tilesWrap = document.getElementById('s01-tiles');
   tilesWrap.innerHTML = data.tiles.map(t => (
@@ -684,6 +687,7 @@ function renderRoundsList_(rounds, opts) {
 
     html += '<div class="row1"><span class="status-badge">' + statusLabel + '</span> ' + formatThaiDateTime_(group.scheduled_at) + '</div>' +
       '<div class="progress">' + typeLabel + ' · ' + group.round_name + ' · ' + group.rounds.length + ' คัน · ' + checked + '/' + expected + ' คนแล้ว</div>' +
+      (archivedList && canManage ? '<button class="btn btn-danger" style="margin-top:8px" data-delete-permanent-group="' + group.key + '">ลบถาวรทั้งกลุ่ม</button>' : '') +
       '<div class="drill-hint">ดูรายคันรถ →</div>' +
       '</div></div>';
     return html;
@@ -708,6 +712,14 @@ function renderRoundsList_(rounds, opts) {
     toast(results.every(r => r.ok) ? 'เก็บรอบเข้าประวัติแล้ว' : 'เก็บไม่สำเร็จบางคัน');
     afterChange();
   })));
+  list.querySelectorAll('[data-delete-permanent-group]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    e.stopPropagation(); // ปุ่มนี้อยู่ใน .round-item-content เดียวกับ data-open-group กันไม่ให้ bubble ไปเปิดหน้ารายละเอียดด้วย
+    if (!confirm('ลบรอบเช็คทั้งกลุ่มนี้ถาวร (ทุกคันรถ)? ข้อมูลการเช็คจะหายไปด้วยและกู้คืนไม่ได้')) return;
+    const group = groups.find(g => g.key === e.currentTarget.dataset.deletePermanentGroup);
+    const results = await Promise.all(group.rounds.map(r => api('round.delete', { roundId: r.round_id })));
+    toast(results.every(r => r.ok) ? 'ลบรอบถาวรแล้ว' : 'ลบไม่สำเร็จบางคัน');
+    afterChange();
+  })));
   list.querySelectorAll('[data-restore-group]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
     const group = groups.find(g => g.key === e.currentTarget.dataset.restoreGroup);
     const results = await Promise.all(group.rounds.map(r => api('round.restore', { roundId: r.round_id })));
@@ -719,9 +731,9 @@ function renderRoundsList_(rounds, opts) {
 }
 
 // S-14: การ์ดรถแต่ละคันของ "รอบเช็ค" หนึ่งกลุ่มที่เลือกจาก S-02/S-06
-function navigateToSession_(group, archived) {
+function navigateToSession_(group, archived, backTo) {
   state.currentSession = { round_name: group.round_name, round_type: group.round_type, scheduled_at: group.scheduled_at, archived: !!archived };
-  document.getElementById('s14-back').dataset.back = archived ? 'S-06' : 'S-02';
+  document.getElementById('s14-back').dataset.back = backTo || (archived ? 'S-06' : 'S-02');
   const typeLabel = ROUND_TYPE_LABELS_[group.round_type] || group.round_type;
   document.getElementById('s14-title').textContent = typeLabel + ' · ' + group.round_name;
   showScreen('S-14');
@@ -750,13 +762,12 @@ function renderSessionBusCards_(rounds, opts) {
 
   const canManage = state.permissions && state.permissions.indexOf('round.open') !== -1;
   const canEdit = state.permissions && state.permissions.indexOf('round.edit') !== -1;
-  const canAssign = state.permissions && state.permissions.indexOf('round.assign') !== -1;
   const isSuperAdmin = !!(state.profile && state.profile.level === 100);
 
   list.innerHTML = rounds.map(round => {
     const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
     const statusLabel = round.status === 'OPEN' ? 'เปิดอยู่' : round.status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
-    const checkers = round.checkers.map(c => c.name).join(' + ') || ('ยังไม่มอบหมายผู้เช็ค ' + ic('alert-triangle', 'icon-amber'));
+    const checkers = round.checkers.map(c => c.name).join(' + ') || 'ยังไม่มีใครเช็ค';
     const isPlanned = round.status === 'PLANNED';
     const isClosed = round.status === 'CLOSED';
     const busLabel = (state.busMap && state.busMap[round.scope_id]) || round.scope_id || '';
@@ -787,8 +798,8 @@ function renderSessionBusCards_(rounds, opts) {
       (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
       (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
       ((isPlanned || round.status === 'OPEN') && canEdit ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
-      (!isClosed && canAssign ? '<button class="btn btn-secondary" style="margin-top:8px" data-assign="' + round.round_id + '">มอบหมายผู้เช็ค</button>' : '') +
       (canManage && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-duplicate="' + round.round_id + '">ทำซ้ำ</button>' : '') +
+      (canManage && archivedList ? '<button class="btn btn-danger" style="margin-top:8px" data-delete-permanent="' + round.round_id + '">ลบถาวร</button>' : '') +
       '</div></div>';
     return html;
   }).join('');
@@ -809,7 +820,6 @@ function renderSessionBusCards_(rounds, opts) {
   list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
   list.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.edit], false)));
   list.querySelectorAll('[data-duplicate]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.duplicate], true)));
-  list.querySelectorAll('[data-assign]').forEach(btn => btn.addEventListener('click', () => openAssignDialog_(btn.dataset.assign)));
   list.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
     if (!confirm('ยืนยันลบรอบเช็คนี้?')) return;
     const roundId = e.currentTarget.dataset.delete;
@@ -823,6 +833,14 @@ function renderSessionBusCards_(rounds, opts) {
     const r = await api('round.archive', { roundId });
     if (!r.ok) { toast(r.error.message); return; }
     toast('เก็บรอบเข้าประวัติแล้ว');
+    await afterChange();
+  })));
+  list.querySelectorAll('[data-delete-permanent]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    if (!confirm('ลบรอบนี้ถาวร? ข้อมูลการเช็คของรอบนี้จะหายไปด้วยและกู้คืนไม่ได้')) return;
+    const roundId = e.currentTarget.dataset.deletePermanent;
+    const r = await api('round.delete', { roundId });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('ลบรอบถาวรแล้ว');
     await afterChange();
   })));
   list.querySelectorAll('[data-restore]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
@@ -1051,10 +1069,47 @@ async function loadDaySummary_() {
   wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
   document.getElementById('s07-reconcile').innerHTML = '';
   setSyncBadge_('s07-sync', 'loading');
-  const r = await api('day.summary', { direction: state.s07Direction });
+  const [r] = await Promise.all([api('day.summary', { direction: state.s07Direction }), ensureBusMap_()]);
   if (!r.ok) { wrap.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; setSyncBadge_('s07-sync', 'error'); return; }
   setSyncBadge_('s07-sync', 'fresh', Date.now());
   renderDaySummary_(r.data);
+}
+
+// การ์ดสรุปยอดวันแบบ "ตามรอบที่ทำการบันทึก" — ใช้ข้อมูลรอบชุดเดียวกับ round.today เป๊ะ (backend ส่ง
+// d.rounds มาจาก roundToday() ตรง ๆ ไม่คำนวณซ้ำ) เพื่อให้ตัวเลขตรงกับ "รอบเช็ควันนี้" เสมอ ไม่มีปุ่ม
+// จัดการใด ๆ (อ่านอย่างเดียว) แต่กดการ์ดแล้วเจาะดูรายคันรถได้ผ่านหน้าเดียวกับ S-02 (S-14)
+function renderDaySummaryRounds_(rounds) {
+  if (!rounds || !rounds.length) return '';
+  state.roundsById = state.roundsById || {};
+  rounds.forEach(r => { state.roundsById[r.round_id] = r; });
+  state.activeRoundsRaw = rounds;
+
+  const groups = groupRoundsForDisplay_(rounds);
+  const cards = groups.map(group => {
+    const typeLabel = ROUND_TYPE_LABELS_[group.round_type] || group.round_type;
+    const status = aggregateGroupStatus_(group);
+    const statusClass = status === 'OPEN' ? 'open' : (status === 'CLOSED' ? 'closed' : '');
+    const statusLabel = status === 'OPEN' ? 'เปิดอยู่' : status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
+    const checked = group.rounds.reduce((s, r) => s + (r.checked || 0), 0);
+    const expected = group.rounds.reduce((s, r) => s + (r.expected || 0), 0);
+    return '<div class="round-item ' + statusClass + '" data-summary-group="' + group.key + '">' +
+      '<div class="round-item-content" data-open-group="' + group.key + '">' +
+      '<div class="row1"><span class="status-badge">' + statusLabel + '</span> ' + formatThaiDateTime_(group.scheduled_at) + '</div>' +
+      '<div class="progress">' + typeLabel + ' · ' + group.round_name + ' · ' + group.rounds.length + ' คัน · ' + checked + '/' + expected + ' คนแล้ว</div>' +
+      '<div class="drill-hint">ดูรายคันรถ →</div>' +
+      '</div></div>';
+  }).join('');
+
+  return '<div style="padding:4px 16px 0;font-weight:700;">สรุปตามรอบที่บันทึก</div>' + cards;
+}
+
+function wireDaySummaryRoundCards_() {
+  document.querySelectorAll('#s07-summary [data-open-group]').forEach(el => el.addEventListener('click', () => {
+    const rounds = state.activeRoundsRaw || [];
+    const groups = groupRoundsForDisplay_(rounds);
+    const group = groups.find(g => g.key === el.dataset.openGroup);
+    if (group) navigateToSession_(group, false, 'S-07');
+  }));
 }
 
 function renderDaySummary_(d) {
@@ -1069,6 +1124,7 @@ function renderDaySummary_(d) {
     '<div class="progress-bar" style="margin:10px 0;"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
     '<div style="color:var(--text-muted);font-size:13px;">' + pct + '%</div>' +
     '</div>' +
+    renderDaySummaryRounds_(d.rounds) +
     '<div class="card" style="margin:12px 16px;">' +
     statRow_('ครบวงจร', t.completed, 'icon-ok') +
     statRow_('ขาด', t.absent, '') +
@@ -1086,6 +1142,8 @@ function renderDaySummary_(d) {
       '<div style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ยังปิดยอดไม่ได้ — เหลือ ' + t.unaccounted + ' คน</div>' +
       '<button class="btn btn-secondary btn-block" style="margin-top:10px;" id="btn-day-view-missing">ดูว่าใครหาย →</button>' +
       '</div>');
+
+  wireDaySummaryRoundCards_();
 
   if (d.canClose && canClose) {
     onClickGuarded_('btn-day-close', async () => {
@@ -1467,7 +1525,7 @@ onClickGuarded_('dlg-create-round-submit', async () => {
   document.getElementById('dlg-create-round').classList.remove('show');
   document.getElementById('cr-name').value = '';
   if (failed.length) toast('สร้างสำเร็จ ' + created + ' คัน — ผิดพลาด: ' + failed.join(', '));
-  else toast('สร้างรอบให้ ' + created + ' คันแล้ว — อย่าลืมมอบหมายผู้เช็คก่อนเปิดรอบ');
+  else toast('สร้างรอบให้ ' + created + ' คันแล้ว');
   loadRounds_({ silent: true });
 });
 
@@ -2014,6 +2072,9 @@ async function loadStudentHome_(opts) {
   document.getElementById('s21-name').textContent = d.profile.nickname ? d.profile.name + ' (' + d.profile.nickname + ')' : d.profile.name;
   document.getElementById('s21-class').textContent = [d.profile.class, d.bus ? d.bus.bus_name : ''].filter(Boolean).join(' · ');
   document.getElementById('s21-sponsor').textContent = d.profile.registered_by_name ? 'เพิ่มโดย ' + d.profile.registered_by_name : '';
+  document.getElementById('s21-avatar').innerHTML = d.profile.picture
+    ? '<img src="' + d.profile.picture + '" alt="">'
+    : '<svg class="icon"><use href="#i-user"/></svg>';
   document.getElementById('s21-today').innerHTML = renderStudentTodayRow_('เช้า', d.today.am) + renderStudentTodayRow_('บ่าย', d.today.pm);
 
   const qrCard = document.getElementById('s21-qr-card');
@@ -2088,65 +2149,3 @@ onClickGuarded_('btn-submit-noride', async () => {
   loadStudentHome_({ silent: true });
 });
 
-// ---------------------------------------------------------------------------
-// Dialog: มอบหมายผู้เช็ค (S-15) — ใช้ user.list เลือกคน จึงต้องมีสิทธิ์ user.view ด้วย
-// (round.assign เปิดให้ SUPERVISOR ใช้ได้ แต่ SUPERVISOR ไม่มี user.view — ในกรณีนั้นแจ้งตรง ๆ
-// แทนที่จะยิง user.list แล้วเจอ E_FORBIDDEN เงียบ ๆ)
-// ---------------------------------------------------------------------------
-
-document.getElementById('dlg-assign-cancel').addEventListener('click', () => {
-  document.getElementById('dlg-assign-round').classList.remove('show');
-});
-
-async function openAssignDialog_(roundId) {
-  document.getElementById('assign-round-id').value = roundId;
-  renderAssignCurrent_(roundId);
-  document.getElementById('dlg-assign-round').classList.add('show');
-
-  const sel = document.getElementById('assign-user-select');
-  const addBtn = document.getElementById('dlg-assign-add');
-  if (state.permissions.indexOf('user.view') === -1) {
-    sel.innerHTML = '<option value="">(ต้องมีสิทธิ์ดูรายชื่อผู้ใช้จึงจะเลือกได้ — ติดต่อผู้ดูแลระบบ)</option>';
-    sel.disabled = true; addBtn.disabled = true;
-    return;
-  }
-  sel.disabled = false; addBtn.disabled = false;
-  sel.innerHTML = '<option value="">กำลังโหลด...</option>';
-  const r = await api('user.list', { status: 'ACTIVE' });
-  if (!r.ok) { sel.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>'; return; }
-  sel.innerHTML = r.data.map(u => '<option value="' + u.user_id + '">' + u.display_name + ' (' + u.role_name + ')</option>').join('');
-}
-
-const ROLE_IN_ROUND_LABEL_ = { LEAD: 'หัวหน้ารอบ', ASSIST: 'ผู้ช่วย' };
-
-function renderAssignCurrent_(roundId) {
-  const round = state.roundsById[roundId];
-  const wrap = document.getElementById('dlg-assign-current');
-  if (!round || !round.checkers.length) { wrap.innerHTML = '<div class="empty-state">ยังไม่มีผู้เช็ค</div>'; return; }
-  wrap.innerHTML = round.checkers.map(c => (
-    '<div class="roster-row"><div><div class="name">' + c.name + '</div><div class="meta">' + (ROLE_IN_ROUND_LABEL_[c.role] || c.role) + '</div></div>' +
-    '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-unassign="' + c.user_id + '">ถอด</button></div>'
-  )).join('');
-  wrap.querySelectorAll('[data-unassign]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
-    if (!confirm('ถอดผู้เช็คคนนี้ออกจากรอบ?')) return;
-    const r = await api('round.unassign', { roundId: roundId, userId: e.currentTarget.dataset.unassign });
-    if (!r.ok) { toast(r.error.message); return; }
-    state.roundsById[roundId].checkers = r.data.checkers;
-    toast('ถอดผู้เช็คแล้ว');
-    renderAssignCurrent_(roundId);
-    loadRounds_({ silent: true });
-  })));
-}
-
-onClickGuarded_('dlg-assign-add', async () => {
-  const roundId = document.getElementById('assign-round-id').value;
-  const userId = document.getElementById('assign-user-select').value;
-  const roleInRound = document.getElementById('assign-role-select').value;
-  if (!userId) { toast('กรุณาเลือกผู้เช็ค'); return; }
-  const r = await api('round.assign', { roundId: roundId, assignees: [{ userId: userId, roleInRound: roleInRound }] });
-  if (!r.ok) { toast(r.error.message); return; }
-  state.roundsById[roundId].checkers = r.data.checkers;
-  toast('มอบหมายแล้ว');
-  renderAssignCurrent_(roundId);
-  loadRounds_({ silent: true });
-});
