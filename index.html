@@ -259,11 +259,23 @@
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
       <div class="title">รอบเช็ควันนี้</div>
+      <button class="back" id="btn-goto-round-history" title="ประวัติรอบรถ" aria-label="ประวัติรอบรถ"><svg class="icon"><use href="#i-clock"/></svg></button>
       <button class="back" id="btn-refresh-rounds" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s02-sync"></div>
     <div id="s02-list"></div>
     <button class="btn btn-secondary btn-block" id="btn-new-round" style="margin:12px 16px;width:calc(100% - 32px);">+ สร้างรอบเช็คใหม่</button>
+  </section>
+
+  <!-- ============ S-06 ประวัติรอบรถ (รอบที่เก็บออกจากรอบเช็ควันนี้) ============ -->
+  <section class="screen" data-screen="S-06">
+    <div class="topbar">
+      <button class="back" data-back="S-02" aria-label="ย้อนกลับ">←</button>
+      <div class="title">ประวัติรอบรถ</div>
+      <button class="back" id="btn-refresh-round-history" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
+    </div>
+    <div class="sync-indicator" id="s06-sync"></div>
+    <div id="s06-list"></div>
   </section>
 
   <!-- ============ S-03 หน้าสแกน ============ -->

@@ -581,42 +581,62 @@ document.getElementById('btn-refresh-rounds').addEventListener('click', () => lo
 
 const ROUND_TYPE_LABELS_ = { BOARD: 'ขึ้นรถ', DROP: 'ลงรถ', HEADCOUNT: 'นับยอด', ACTIVITY: 'กิจกรรม' };
 
-function renderRoundsList_(rounds) {
-  const list = document.getElementById('s02-list');
-  if (!rounds.length) { list.innerHTML = '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>'; return; }
+function renderRoundsList_(rounds, opts) {
+  opts = opts || {};
+  const archivedList = !!opts.archived;
+  const list = document.getElementById(opts.listElId || 's02-list');
+  if (!rounds.length) {
+    list.innerHTML = '<div class="empty-state">' + (archivedList ? 'ยังไม่มีรอบที่เก็บไว้' : 'วันนี้ยังไม่มีรอบเช็ค') + '</div>';
+    return;
+  }
 
-  state.roundsById = {};
+  state.roundsById = state.roundsById || {};
   rounds.forEach(r => { state.roundsById[r.round_id] = r; });
 
   const canManage = state.permissions && state.permissions.indexOf('round.open') !== -1;
+  const canEdit = state.permissions && state.permissions.indexOf('round.edit') !== -1;
 
   list.innerHTML = rounds.map(round => {
     const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
     const statusLabel = round.status === 'OPEN' ? 'เปิดอยู่' : round.status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
     const checkers = round.checkers.map(c => c.name).join(' + ') || ('ยังไม่มอบหมายผู้เช็ค ' + ic('alert-triangle', 'icon-amber'));
     const isPlanned = round.status === 'PLANNED';
+    const isClosed = round.status === 'CLOSED';
     const busLabel = (state.busMap && state.busMap[round.scope_id]) || round.scope_id || '';
     const typeLabel = ROUND_TYPE_LABELS_[round.round_type] || round.round_type;
 
-    let html = '<div class="round-item ' + statusClass + '" data-round="' + round.round_id + '" data-status="' + round.status + '">';
-    if (isPlanned && canManage) {
-      html += '<div class="round-item-actions" data-delete="' + round.round_id + '">ลบ</div>';
+    // สลับ swipe: รอบใน "วันนี้" ที่ยัง PLANNED → ปัดลบได้เลย (ยังไม่มีข้อมูลเช็ค);
+    // รอบที่ OPEN/CLOSED แล้ว → ปัดเก็บเข้าประวัติแทน (ย้อนกลับได้ ไม่ทำลายข้อมูล);
+    // อยู่ในหน้าประวัติอยู่แล้ว → ปัดคืนกลับไปหน้ารอบเช็ควันนี้
+    let swipeAction = null;
+    if (canManage) {
+      if (archivedList) swipeAction = { attr: 'data-restore', label: 'คืน', zoneClass: 'restore-zone', bgClass: 'archive-zone-bg' };
+      else if (isPlanned) swipeAction = { attr: 'data-delete', label: 'ลบ', zoneClass: '', bgClass: '' };
+      else swipeAction = { attr: 'data-archive', label: 'เก็บ', zoneClass: 'archive-zone', bgClass: 'archive-zone-bg' };
+    }
+
+    let html = '<div class="round-item ' + statusClass + (swipeAction ? ' ' + swipeAction.bgClass : '') + '" data-round="' + round.round_id + '" data-status="' + round.status + '">';
+    if (swipeAction) {
+      html += '<div class="round-item-actions ' + swipeAction.zoneClass + '" ' + swipeAction.attr + '="' + round.round_id + '">' + swipeAction.label + '</div>';
       html += '<div class="round-item-content swipeable">';
     } else {
       html += '<div class="round-item-content">';
     }
 
-    html += '<div class="row1"><span class="status-dot"></span> ' + round.seq + '. ' + round.round_name + ' — ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
-      '<div class="progress">' + formatThaiDateTime_(round.scheduled_at) + ' · ' + typeLabel + ' · ' + busLabel + '</div>' +
+    html += '<div class="row1"><span class="status-badge">' + (busLabel || '—') + '</span> ' + round.seq + '. ' + round.round_name + ' — ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
+      '<div class="progress">' + formatThaiDateTime_(round.scheduled_at) + ' · ' + typeLabel + '</div>' +
       '<div class="progress">' + checkers + '</div>' +
       (round.duplicateAttempts > 0 ? '<div class="warn">' + ic('alert-triangle') + ' มีการเช็คซ้ำ ' + round.duplicateAttempts + ' ครั้ง</div>' : '') +
       (isPlanned ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
       (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
-      (isPlanned && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
+      (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
+      ((isPlanned || round.status === 'OPEN') && canEdit ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
       (canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-duplicate="' + round.round_id + '">ทำซ้ำ</button>' : '') +
       '</div></div>';
     return html;
   }).join('');
+
+  const afterChange = () => { if (archivedList) loadRoundHistory_({ silent: true }); else loadRounds_({ silent: true }); };
 
   list.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => openRound_(btn.dataset.open)));
   list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
@@ -628,7 +648,28 @@ function renderRoundsList_(rounds) {
     const r = await api('round.delete', { roundId });
     if (!r.ok) { toast(r.error.message); return; }
     toast('ลบรอบสำเร็จ');
-    loadRounds_({ silent: true });
+    afterChange();
+  })));
+  list.querySelectorAll('[data-archive]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const roundId = e.currentTarget.dataset.archive;
+    const r = await api('round.archive', { roundId });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('เก็บรอบเข้าประวัติแล้ว');
+    afterChange();
+  })));
+  list.querySelectorAll('[data-restore]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const roundId = e.currentTarget.dataset.restore;
+    const r = await api('round.restore', { roundId });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('คืนรอบไปที่รอบเช็ควันนี้แล้ว');
+    afterChange();
+  })));
+  list.querySelectorAll('[data-reopen]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const roundId = e.currentTarget.dataset.reopen;
+    const r = await api('round.reopen', { roundId });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('เปิดรอบอีกครั้งแล้ว');
+    afterChange();
   })));
 
   // Swipe logic
@@ -690,6 +731,36 @@ async function loadRounds_(opts) {
   renderRoundsList_(r.data);
   setSyncBadge_('s02-sync', 'fresh', Date.now());
 }
+
+async function loadRoundHistory_(opts) {
+  opts = opts || {};
+  const list = document.getElementById('s06-list');
+  const cached = cacheGet_('roundsArchived');
+  if (cached && !opts.silent) {
+    await ensureBusMap_();
+    renderRoundsList_(cached.data, { archived: true, listElId: 's06-list' });
+    setSyncBadge_('s06-sync', 'cache', cached.cachedAt);
+  } else if (!cached) {
+    list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  }
+  setSyncBadge_('s06-sync', 'loading');
+  spinRefreshBtn_('btn-refresh-round-history', true);
+
+  const [r] = await Promise.all([api('round.today', { archived: true }), ensureBusMap_()]);
+  spinRefreshBtn_('btn-refresh-round-history', false);
+  if (!r.ok) {
+    if (!cached) list.innerHTML = '<div class="empty-state">' + r.error.message + '</div>';
+    setSyncBadge_('s06-sync', 'error');
+    return;
+  }
+
+  cacheSet_('roundsArchived', r.data);
+  renderRoundsList_(r.data, { archived: true, listElId: 's06-list' });
+  setSyncBadge_('s06-sync', 'fresh', Date.now());
+}
+
+document.getElementById('btn-goto-round-history').addEventListener('click', () => { showScreen('S-06'); loadRoundHistory_(); });
+document.getElementById('btn-refresh-round-history').addEventListener('click', () => loadRoundHistory_());
 
 document.getElementById('btn-new-round').addEventListener('click', () => openCreateRoundDialog_());
 document.getElementById('dlg-create-round-cancel').addEventListener('click', () => {

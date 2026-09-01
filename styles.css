@@ -179,10 +179,15 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   font-weight: bold;
   cursor: pointer;
 }
+.round-item-actions.archive-zone, .round-item-actions.restore-zone { background: var(--color-primary); }
+.round-item.archive-zone-bg { background: var(--color-primary); }
 .round-item .row1 { display: flex; align-items: center; gap: 8px; font-weight: 700; }
-.round-item .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-absent); }
-.round-item.open .status-dot { background: var(--color-board); }
-.round-item.closed .status-dot { background: var(--color-primary); }
+.round-item .status-badge {
+  padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff;
+  background: var(--color-absent); white-space: nowrap;
+}
+.round-item.open .status-badge { background: var(--color-board); }
+.round-item.closed .status-badge { background: var(--color-primary); }
 .round-item .progress { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
 .round-item .warn { color: var(--color-duplicate); font-size: 13px; margin-top: 4px; font-weight: 600; }
 
