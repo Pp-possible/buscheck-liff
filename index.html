@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>BusCheck — เช็คยอดนักเรียนบนรถ</title>
 <link rel="stylesheet" href="styles.css">
 <script>
@@ -198,7 +198,7 @@
   <section class="screen" data-screen="S-00b">
     <div class="topbar">
       <button class="back" data-back="S-00a" aria-label="ย้อนกลับ">←</button>
-      <div class="title" id="s00b-title">สแกน QR ผู้รับรอง</div>
+      <h1 class="title" id="s00b-title">สแกน QR ผู้รับรอง</h1>
     </div>
     <div class="card">
       <p id="s00b-instruction" style="margin:0 0 12px;color:var(--text-muted)"></p>
@@ -211,7 +211,7 @@
   <section class="screen" data-screen="S-00c">
     <div class="topbar">
       <button class="back" data-back="S-00b" aria-label="ย้อนกลับ">←</button>
-      <div class="title">กรอกข้อมูล</div>
+      <h1 class="title">กรอกข้อมูล</h1>
     </div>
     <div class="card" id="s00c-sponsor-card">
       <div class="card-title"><svg class="icon icon-ok"><use href="#i-check-circle"/></svg> ยืนยันผู้รับรองแล้ว</div>
@@ -239,7 +239,7 @@
 
   <!-- ============ S-00d สำเร็จ (ใช้ร่วม S-19 แสดง QR) ============ -->
   <section class="screen" data-screen="S-00d">
-    <div class="topbar"><div class="title">ลงทะเบียนสำเร็จ</div></div>
+    <div class="topbar"><h1 class="title">ลงทะเบียนสำเร็จ</h1></div>
     <div class="qr-wrap">
       <div id="s00d-message" style="text-align:center;margin-bottom:16px;font-weight:600"></div>
       <div id="s00d-qr-box" class="qr-box" style="display:none">
@@ -252,7 +252,7 @@
   <!-- ============ S-01 หน้าแรก ============ -->
   <section class="screen" data-screen="S-01">
     <div class="topbar">
-      <div class="title">BusCheck</div>
+      <h1 class="title">BusCheck</h1>
       <button class="back" id="btn-refresh-home" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
       <button class="back" id="btn-logout" title="ออกจากระบบ" aria-label="ออกจากระบบ"><svg class="icon"><use href="#i-log-out"/></svg></button>
     </div>
@@ -273,7 +273,7 @@
   <section class="screen" data-screen="S-02">
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
-      <div class="title">รอบเช็ควันนี้</div>
+      <h1 class="title">รอบเช็ควันนี้</h1>
       <button class="back" id="btn-goto-round-history" title="ประวัติรอบรถ" aria-label="ประวัติรอบรถ"><svg class="icon"><use href="#i-clock"/></svg></button>
       <button class="back" id="btn-refresh-rounds" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
@@ -286,7 +286,7 @@
   <section class="screen" data-screen="S-06">
     <div class="topbar">
       <button class="back" data-back="S-02" aria-label="ย้อนกลับ">←</button>
-      <div class="title">ประวัติรอบรถ</div>
+      <h1 class="title">ประวัติรอบรถ</h1>
       <button class="back" id="btn-refresh-round-history" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s06-sync"></div>
@@ -297,7 +297,7 @@
   <section class="screen" data-screen="S-16">
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
-      <div class="title">รายงาน: ใครเช็คใคร</div>
+      <h1 class="title">รายงาน: ใครเช็คใคร</h1>
     </div>
     <div class="filter-tabs" id="s16-tabs">
       <div class="chip selected" data-tab="student">รายนักเรียน</div>
@@ -326,7 +326,7 @@
   <section class="screen" data-screen="S-07">
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
-      <div class="title">สรุปยอดวัน</div>
+      <h1 class="title">สรุปยอดวัน</h1>
       <button class="back" id="btn-refresh-daysummary" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="mode-toggle" style="margin:12px 16px 0;">
@@ -342,7 +342,7 @@
   <section class="screen" data-screen="S-12">
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
-      <div class="title">ผู้ใช้ระบบ</div>
+      <h1 class="title">ผู้ใช้ระบบ</h1>
       <button class="back" id="btn-refresh-users" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="search-bar"><input id="s12-search" type="text" placeholder="ค้นหาชื่อ"></div>
@@ -359,7 +359,7 @@
   <section class="screen" data-screen="S-17">
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
-      <div class="title">รออนุมัติ</div>
+      <h1 class="title">รออนุมัติ</h1>
       <button class="back" id="btn-refresh-approvals" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s17-sync"></div>
@@ -370,7 +370,7 @@
   <section class="screen" data-screen="S-13">
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
-      <div class="title">ศูนย์แจ้งเตือน</div>
+      <h1 class="title">ศูนย์แจ้งเตือน</h1>
       <button class="back" id="btn-refresh-alerts" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="filter-tabs" id="s13-tabs">
@@ -416,7 +416,7 @@
   <section class="screen" data-screen="S-04">
     <div class="topbar">
       <button class="back" data-back="S-03" aria-label="ย้อนกลับ">←</button>
-      <div class="title">รายชื่อนักเรียน</div>
+      <h1 class="title">รายชื่อนักเรียน</h1>
       <button class="back" id="btn-refresh-roster" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s04-sync"></div>
@@ -436,7 +436,7 @@
   <section class="screen" data-screen="S-05">
     <div class="topbar">
       <button class="back" data-back="S-03" aria-label="ย้อนกลับ">←</button>
-      <div class="title">ปิดรอบ / ปิดเที่ยวรถ</div>
+      <h1 class="title">ปิดรอบ / ปิดเที่ยวรถ</h1>
       <button class="back" id="btn-refresh-close" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s05-sync"></div>
@@ -457,7 +457,7 @@
   <section class="screen" data-screen="S-19">
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
-      <div class="title">QR รับรองการลงทะเบียน</div>
+      <h1 class="title">QR รับรองการลงทะเบียน</h1>
     </div>
     <div class="qr-wrap">
       <div class="qr-box"><div id="s19-qr-canvas"></div></div>
@@ -482,7 +482,7 @@
   <section class="screen" data-screen="S-20">
     <div class="topbar">
       <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
-      <div class="title">จัดการรถ</div>
+      <h1 class="title">จัดการรถ</h1>
       <button class="back" id="btn-refresh-buses" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s20-sync"></div>
@@ -495,7 +495,7 @@
   <!-- ============ S-21 โหมดนักเรียน (หน้าแรกของ persona = STUDENT) ============ -->
   <section class="screen" data-screen="S-21">
     <div class="topbar">
-      <div class="title">BusCheck</div>
+      <h1 class="title">BusCheck</h1>
       <button class="back" id="btn-refresh-student-home" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
     <div class="sync-indicator" id="s21-sync"></div>
@@ -527,7 +527,7 @@
   <section class="screen" data-screen="S-22">
     <div class="topbar">
       <button class="back" data-back="S-21" aria-label="ย้อนกลับ">←</button>
-      <div class="title">รถและจุดจอด</div>
+      <h1 class="title">รถและจุดจอด</h1>
     </div>
     <div id="s22-content" style="padding:12px 16px;"></div>
   </section>
@@ -536,7 +536,7 @@
   <section class="screen" data-screen="S-23">
     <div class="topbar">
       <button class="back" data-back="S-21" aria-label="ย้อนกลับ">←</button>
-      <div class="title">แจ้งไม่ใช้รถ</div>
+      <h1 class="title">แจ้งไม่ใช้รถ</h1>
     </div>
     <div style="padding:12px 16px;">
       <div class="field" style="margin:0 0 10px;"><label>ตั้งแต่วันที่ *</label><input id="s23-date-from" type="date"></div>
@@ -558,7 +558,7 @@
   <section class="screen" data-screen="S-24">
     <div class="topbar">
       <button class="back" data-back="S-21" aria-label="ย้อนกลับ">←</button>
-      <div class="title">ประวัติการเดินทาง</div>
+      <h1 class="title">ประวัติการเดินทาง</h1>
     </div>
     <div id="s24-list" style="padding:12px 16px;"></div>
   </section>

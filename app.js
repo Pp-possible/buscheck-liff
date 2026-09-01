@@ -872,7 +872,7 @@ onClickGuarded_('btn-s16-checker-run', async () => {
     '<div class="progress">รอบที่รับผิดชอบ ' + d.roundsResponsible + ' รอบ · เช็ค ' + d.studentsChecked + ' คน</div>' +
     '<div class="progress">เช็คซ้ำที่ถูกปฏิเสธ ' + d.duplicatesRejected + ' ครั้ง</div>' +
     (d.incompleteRounds > 0
-      ? '<div style="color:var(--color-duplicate);font-weight:600;margin-top:4px;">' + ic('alert-triangle', 'icon-amber') + ' รอบที่ปิดไม่ครบ ' + d.incompleteRounds + ' รอบ</div>'
+      ? '<div style="color:var(--color-duplicate-text);font-weight:600;margin-top:4px;">' + ic('alert-triangle', 'icon-amber') + ' รอบที่ปิดไม่ครบ ' + d.incompleteRounds + ' รอบ</div>'
       : '') +
     '</div>';
 });
@@ -1060,7 +1060,7 @@ function renderUsersList_(users) {
     '<div class="roster-row" data-user="' + u.user_id + '" style="flex-direction:column;align-items:stretch;gap:6px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;">' +
     '<div><div class="name">' + u.display_name + '</div><div class="meta">เข้าใช้ล่าสุด ' + (u.last_login_at ? new Date(u.last_login_at).toLocaleString('th-TH') : 'ยังไม่เคย') + '</div></div>' +
-    '<span class="status-badge" style="background:' + (u.status === 'ACTIVE' ? 'var(--color-board)' : u.status === 'SUSPENDED' ? 'var(--color-error)' : 'var(--color-absent)') + '">' + u.status + '</span>' +
+    '<span class="status-badge" style="background:' + (u.status === 'ACTIVE' ? 'var(--color-board-badge)' : u.status === 'SUSPENDED' ? 'var(--color-error-badge)' : 'var(--color-absent-badge)') + '">' + u.status + '</span>' +
     '</div>' +
     '<div style="display:flex;gap:8px;align-items:center;">' +
     '<select class="s12-role-select" data-user="' + u.user_id + '" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">' +

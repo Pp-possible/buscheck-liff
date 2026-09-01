@@ -13,6 +13,18 @@
   --color-absent: #95A5A6;
   --color-error: #E74C3C;
 
+  /* โทนเข้มของสีสถานะข้างบน ใช้เฉพาะตอนเป็น "ตัวหนังสือ/ไอคอนเล็ก" บนพื้นสว่าง — สีต้นฉบับผ่าน
+     WCAG ในฐานะพื้นหลังก้อนใหญ่/บั้ค แต่ตัวอักษรสีขาวบนพื้นสีเหล่านั้น หรือตัวอักษรสีเหล่านั้นบน
+     พื้นขาว ค่า contrast ไม่ถึง 4.5:1 (คำนวณแล้ว) จึงต้องมีคู่สีเข้มแยกไว้ใช้เฉพาะกรณีนี้
+     ในโหมดมืดสีต้นฉบับ contrast พอผ่านอยู่แล้วเลยแค่ alias กลับไปสีต้นฉบับ (ดู @media ด้านล่าง) */
+  --color-board-badge: #1E8449;
+  --color-primary-badge: #1F6FB2;
+  --color-absent-badge: #6B7785;
+  --color-error-badge: #B93A2C;
+  --color-drop-text: #A85400;
+  --color-duplicate-text: #8A6D00;
+  --color-drop-badge: var(--color-drop-text); /* alias — สีเดียวกัน ใช้ตอนเป็นพื้นหลังของตัวหนังสือขาว */
+
   --bg: #FFFFFF;
   --bg-elevated: #F5F7FA;
   --text: #1B1F23;
@@ -31,6 +43,25 @@
     --border: #2C3136;
     --card-bg: #1D2125;
     --shadow: 0 1px 3px rgba(0,0,0,0.4);
+
+    /* พื้นมืด + สีต้นฉบับสด contrast พอผ่านอยู่แล้ว ไม่ต้องใช้โทนเข้มพิเศษเหมือนพื้นสว่าง */
+    --color-board-badge: var(--color-board);
+    --color-primary-badge: var(--color-primary);
+    --color-absent-badge: var(--color-absent);
+    --color-error-badge: var(--color-error);
+    --color-drop-text: var(--color-drop);
+    --color-duplicate-text: var(--color-duplicate);
+  }
+}
+
+/* เคารพการตั้งค่า "ลดการเคลื่อนไหว" ของระบบ — ปิดแอนิเมชัน/ทรานสิชันเกือบทั้งหมด ยกเว้น spinner
+   ที่ยังต้องหมุนต่อ (เป็นตัวบอกสถานะ "กำลังโหลด" ที่จำเป็น ไม่ใช่ของตกแต่ง) */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.spinner):not(.btn-refresh-spin), *:not(.spinner):not(.btn-refresh-spin)::before, *:not(.spinner):not(.btn-refresh-spin)::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -43,7 +74,7 @@
   fill: none; stroke: currentColor; stroke-width: 2;
   stroke-linecap: round; stroke-linejoin: round;
 }
-.icon-amber { color: var(--color-drop); }
+.icon-amber { color: var(--color-drop-text); }
 .progress-bar { height: 10px; border-radius: 999px; background: var(--bg-elevated); overflow: hidden; }
 .progress-bar-fill { height: 100%; background: var(--color-board); border-radius: 999px; transition: width 0.3s ease; }
 .icon-error { color: var(--color-error); }
@@ -69,9 +100,9 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .topbar {
   position: sticky; top: 0; z-index: 20;
   background: var(--card-bg); border-bottom: 1px solid var(--border);
-  padding: 10px 16px; display: flex; align-items: center; gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 8px;
 }
-.topbar .title { font-weight: 700; font-size: 18px; flex: 1; }
+.topbar .title { font-weight: 700; font-size: 18px; flex: 1; margin: 0; }
 .topbar .back {
   font-size: 22px; background: none; border: none; color: var(--text); cursor: pointer;
   min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
@@ -131,6 +162,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .chip {
   padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg);
   cursor: pointer; font-size: 14px;
+  min-height: 44px; display: inline-flex; align-items: center; flex-shrink: 0;
 }
 .chip.selected { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 
@@ -186,16 +218,16 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .round-item .row1 { display: flex; align-items: center; gap: 8px; font-weight: 700; }
 .round-item .status-badge {
   padding: 2px 10px; border-radius: 999px; font-size: 1em; font-weight: 700; color: #fff;
-  background: var(--color-absent); white-space: nowrap;
+  background: var(--color-absent-badge); white-space: nowrap;
 }
-.round-item.open .status-badge { background: var(--color-board); }
-.round-item.closed .status-badge { background: var(--color-primary); }
+.round-item.open .status-badge { background: var(--color-board-badge); }
+.round-item.closed .status-badge { background: var(--color-primary-badge); }
 .round-item .progress { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
-.round-item .warn { color: var(--color-duplicate); font-size: 13px; margin-top: 4px; font-weight: 600; }
+.round-item .warn { color: var(--color-duplicate-text); font-size: 13px; margin-top: 4px; font-weight: 600; }
 
 /* ---------- S-03 Scan screen ---------- */
 .scan-topbar {
-  background: var(--color-primary); color: #fff; padding: 10px 16px; position: sticky; top: 0; z-index: 20;
+  background: var(--color-primary); color: #fff; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 8px;
 }
 .scan-topbar .back {
@@ -216,8 +248,8 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 
 .mode-toggle { display: flex; margin: 0 16px 10px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
 .mode-toggle button { flex: 1; padding: 10px; border: none; background: var(--bg-elevated); font-weight: 700; cursor: pointer; }
-.mode-toggle button.active.board { background: var(--color-board); color: #fff; }
-.mode-toggle button.active.drop { background: var(--color-drop); color: #fff; }
+.mode-toggle button.active.board { background: var(--color-board-badge); color: #fff; }
+.mode-toggle button.active.drop { background: var(--color-drop-badge); color: #fff; }
 
 #qr-reader { margin: 0 16px; border-radius: 14px; overflow: hidden; background: #000; min-height: 220px; }
 
@@ -232,10 +264,10 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .scan-feed-item.transfer { background: rgba(52,152,219,0.1); }
 .scan-feed-item.duplicate { background: rgba(241,196,15,0.12); }
 .scan-feed-item.error { background: rgba(231,76,60,0.1); }
-.scan-feed-item .medical { color: var(--color-drop); font-size: 12px; margin-top: 2px; }
+.scan-feed-item .medical { color: var(--color-drop-text); font-size: 12px; margin-top: 2px; }
 
 .bottom-actions {
-  position: sticky; bottom: 0; display: flex; gap: 8px; padding: 10px 16px;
+  position: sticky; bottom: 0; display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background: var(--card-bg); border-top: 1px solid var(--border);
 }
 .bottom-actions .btn { flex: 1; }
@@ -248,7 +280,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .overlay.show { display: flex; }
 .dialog {
   background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0;
-  padding: 20px 16px 28px; box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+  padding: 20px 16px calc(28px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
 }
 .dialog h3 { margin: 0 0 8px; font-size: 18px; }
 .dialog p { color: var(--text-muted); margin: 0 0 16px; }
