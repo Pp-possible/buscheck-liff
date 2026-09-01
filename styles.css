@@ -140,8 +140,27 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 
 /* ---------- S-02 Round list ---------- */
 .round-item {
-  border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin: 10px 16px;
-  background: var(--card-bg); box-shadow: var(--shadow);
+  border: 1px solid var(--border); border-radius: 12px; margin: 10px 16px;
+  background: var(--color-error); box-shadow: var(--shadow);
+  position: relative; overflow: hidden; padding: 0;
+}
+.round-item-content {
+  padding: 14px;
+  background: var(--card-bg);
+  position: relative;
+  z-index: 2;
+  transition: transform 0.2s ease-out;
+}
+.round-item-actions {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 80px;
+  background: var(--color-error);
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1;
+  font-weight: bold;
+  cursor: pointer;
 }
 .round-item .row1 { display: flex; align-items: center; gap: 8px; font-weight: 700; }
 .round-item .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-absent); }

@@ -547,21 +547,66 @@ function renderRoundsList_(rounds) {
   const list = document.getElementById('s02-list');
   if (!rounds.length) { list.innerHTML = '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>'; return; }
 
+  const canManage = state.permissions && state.permissions.indexOf('round.open') !== -1;
+
   list.innerHTML = rounds.map(round => {
     const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
     const statusLabel = round.status === 'OPEN' ? 'เปิดอยู่' : round.status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
     const checkers = round.checkers.map(c => c.name).join(' + ') || 'ยังไม่มอบหมายผู้เช็ค ⚠';
-    return '<div class="round-item ' + statusClass + '" data-round="' + round.round_id + '" data-status="' + round.status + '">' +
-      '<div class="row1"><span class="status-dot"></span> ' + round.seq + '. ' + round.round_name + ' — ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
+    const isPlanned = round.status === 'PLANNED';
+    
+    let html = '<div class="round-item ' + statusClass + '" data-round="' + round.round_id + '" data-status="' + round.status + '">';
+    if (isPlanned && canManage) {
+      html += '<div class="round-item-actions" data-delete="' + round.round_id + '">ลบ</div>';
+      html += '<div class="round-item-content swipeable">';
+    } else {
+      html += '<div class="round-item-content">';
+    }
+    
+    html += '<div class="row1"><span class="status-dot"></span> ' + round.seq + '. ' + round.round_name + ' — ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
       '<div class="progress">' + checkers + '</div>' +
       (round.duplicateAttempts > 0 ? '<div class="warn">⚠ มีการเช็คซ้ำ ' + round.duplicateAttempts + ' ครั้ง</div>' : '') +
-      (round.status === 'PLANNED' ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
+      (isPlanned ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
       (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
-      '</div>';
+      '</div></div>';
+    return html;
   }).join('');
 
   list.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => openRound_(btn.dataset.open)));
   list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
+  list.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', async (e) => {
+    if (!confirm('ยืนยันลบรอบเช็คนี้?')) return;
+    const roundId = e.currentTarget.dataset.delete;
+    const r = await api('round.delete', { roundId });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('ลบรอบสำเร็จ');
+    loadRounds_({ silent: true });
+  }));
+
+  // Swipe logic
+  let startX = 0, currentX = 0;
+  list.querySelectorAll('.swipeable').forEach(el => {
+    el.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX;
+      currentX = 0;
+      el.style.transition = 'none';
+    }, {passive: true});
+    el.addEventListener('touchmove', e => {
+      currentX = e.touches[0].clientX - startX;
+      if (currentX > 0) currentX = 0; // only swipe left
+      if (currentX < -100) currentX = -100; // max swipe
+      el.style.transform = 'translateX(' + currentX + 'px)';
+    }, {passive: true});
+    el.addEventListener('touchend', e => {
+      el.style.transition = 'transform 0.2s ease-out';
+      if (currentX < -50) {
+        el.style.transform = 'translateX(-80px)'; // snap open
+      } else {
+        el.style.transform = 'translateX(0)'; // snap close
+      }
+      currentX = 0;
+    });
+  });
 }
 
 async function loadRounds_(opts) {
