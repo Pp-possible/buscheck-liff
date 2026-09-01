@@ -40,9 +40,9 @@
     --bg-elevated: #1D2125;
     --text: #F1F3F5;
     --text-muted: #A7B0BA;
-    --border: #2C3136;
-    --card-bg: #1D2125;
-    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    --border: #3A424C;
+    --card-bg: #232830;
+    --shadow: 0 1px 4px rgba(0,0,0,0.55);
 
     /* พื้นมืด + สีต้นฉบับสด contrast พอผ่านอยู่แล้ว ไม่ต้องใช้โทนเข้มพิเศษเหมือนพื้นสว่าง */
     --color-board-badge: var(--color-board);
@@ -100,7 +100,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .topbar {
   position: sticky; top: 0; z-index: 20;
   background: var(--card-bg); border-bottom: 1px solid var(--border);
-  padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 8px;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 14px; display: flex; align-items: center; gap: 8px;
 }
 .topbar .title { font-weight: 700; font-size: 18px; flex: 1; margin: 0; }
 .topbar .back {
@@ -182,12 +182,29 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
   padding: 14px 8px; text-align: center; box-shadow: var(--shadow); cursor: pointer; position: relative;
 }
-.tile .icon-wrap { font-size: 26px; }
-.tile .label { display: block; font-size: 13px; font-weight: 600; margin-top: 6px; }
+.tile:active { background: var(--bg-elevated); }
+.tile .icon-wrap {
+  width: 44px; height: 44px; margin: 0 auto; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--tile-accent-bg, rgba(46,134,222,0.15)); color: var(--tile-accent, var(--color-primary));
+  font-size: 22px;
+}
+.tile .label { display: block; font-size: 13px; font-weight: 600; margin-top: 8px; }
 .tile .badge {
-  position: absolute; top: 6px; right: 6px; background: var(--color-error); color: #fff;
+  position: absolute; top: 6px; right: 6px; background: var(--color-error-badge); color: #fff;
   font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 6px; min-width: 18px;
 }
+/* สีประจำ tile แต่ละกลุ่ม — ให้แยกแยะง่ายขึ้น ไม่จืดเป็นสีเดียวทั้งหน้าเหมือนก่อน
+   (ไม่ใช้ color-mix() เพราะ WebView เก่าบนมือถือบางรุ่นอาจไม่รองรับ — คำนวณ rgba ไว้ตรง ๆ แทน) */
+.tile[data-tile="scan"] .icon-wrap { --tile-accent: #2E86DE; --tile-accent-bg: rgba(46,134,222,0.15); }
+.tile[data-tile="myRounds"] .icon-wrap { --tile-accent: #27AE60; --tile-accent-bg: rgba(39,174,96,0.15); }
+.tile[data-tile="vouchQr"] .icon-wrap { --tile-accent: #E67E22; --tile-accent-bg: rgba(230,126,34,0.15); }
+.tile[data-tile="manageBus"] .icon-wrap { --tile-accent: #3498DB; --tile-accent-bg: rgba(52,152,219,0.15); }
+.tile[data-tile="report"] .icon-wrap { --tile-accent: #2E86DE; --tile-accent-bg: rgba(46,134,222,0.15); }
+.tile[data-tile="daySummary"] .icon-wrap { --tile-accent: #27AE60; --tile-accent-bg: rgba(39,174,96,0.15); }
+.tile[data-tile="users"] .icon-wrap { --tile-accent: #3498DB; --tile-accent-bg: rgba(52,152,219,0.15); }
+.tile[data-tile="approvals"] .icon-wrap { --tile-accent: #8A6D00; --tile-accent-bg: rgba(241,196,15,0.2); }
+.tile[data-tile="notifications"] .icon-wrap { --tile-accent: #E74C3C; --tile-accent-bg: rgba(231,76,60,0.15); }
 
 /* ---------- S-02 Round list ---------- */
 .round-item {
@@ -227,13 +244,13 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 
 /* ---------- S-03 Scan screen ---------- */
 .scan-topbar {
-  background: var(--color-primary); color: #fff; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; position: sticky; top: 0; z-index: 20;
+  background: var(--color-primary); color: #fff; padding: calc(14px + env(safe-area-inset-top)) 16px 14px; position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 8px;
 }
 .scan-topbar .back {
   font-size: 22px; background: none; border: none; color: #fff; cursor: pointer;
   min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 8px; flex-shrink: 0; margin: -10px 0 -10px -8px;
+  border-radius: 8px; flex-shrink: 0; margin: -14px 0 -14px -8px;
 }
 .scan-topbar .back:active { background: rgba(255,255,255,0.15); }
 .scan-topbar .titles { min-width: 0; }
