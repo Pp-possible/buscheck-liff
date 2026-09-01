@@ -11,7 +11,7 @@ function ic(name, cls) {
 }
 
 // ต้องประกาศก่อน boot() เรียกใช้ (renderHomeFromData_ อาจถูกเรียกจาก boot() ทันทีถ้ามีแคชอยู่แล้ว)
-const TILE_ICONS = { scan: ic('camera'), vouchQr: ic('id-card'), myRounds: ic('list'), manageBus: ic('bus') };
+const TILE_ICONS = { scan: ic('camera'), vouchQr: ic('id-card'), myRounds: ic('list'), manageBus: ic('bus'), report: ic('bar-chart') };
 
 const state = {
   sessionToken: null,
@@ -546,6 +546,7 @@ function navigateTile_(route) {
   if (route === 'S-02') { showScreen('S-02'); loadRounds_(); }
   else if (route === 'S-19') { showScreen('S-19'); startVouchQrLoop_(); }
   else if (route === 'S-20') { showScreen('S-20'); loadBuses_(); }
+  else if (route === 'S-16') { showScreen('S-16'); initReportScreen_(); }
 }
 
 async function renderHome_(opts) {
@@ -761,6 +762,110 @@ async function loadRoundHistory_(opts) {
 
 document.getElementById('btn-goto-round-history').addEventListener('click', () => { showScreen('S-06'); loadRoundHistory_(); });
 document.getElementById('btn-refresh-round-history').addEventListener('click', () => loadRoundHistory_());
+
+// ---------------------------------------------------------------------------
+// S-16 รายงาน: ใครเช็คใคร (มุมรายนักเรียน / รายครู)
+// ---------------------------------------------------------------------------
+
+document.getElementById('s16-tabs').querySelectorAll('.chip').forEach(chip => chip.addEventListener('click', () => {
+  document.querySelectorAll('#s16-tabs .chip').forEach(c => c.classList.remove('selected'));
+  chip.classList.add('selected');
+  const tab = chip.dataset.tab;
+  document.getElementById('s16-student-panel').style.display = tab === 'student' ? 'block' : 'none';
+  document.getElementById('s16-checker-panel').style.display = tab === 'checker' ? 'block' : 'none';
+}));
+
+function initReportScreen_() {
+  document.getElementById('s16-tabs').querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', c.dataset.tab === 'student'));
+  document.getElementById('s16-student-panel').style.display = 'block';
+  document.getElementById('s16-checker-panel').style.display = 'none';
+
+  state.s16StudentId = null;
+  document.getElementById('s16-student-search').value = '';
+  document.getElementById('s16-student-results').innerHTML = '';
+  document.getElementById('s16-student-timeline').innerHTML = '';
+  document.getElementById('s16-student-date').value = new Date().toISOString().slice(0, 10);
+
+  const to = new Date();
+  const from = new Date(to.getTime() - 6 * 86400000);
+  document.getElementById('s16-checker-to').value = to.toISOString().slice(0, 10);
+  document.getElementById('s16-checker-from').value = from.toISOString().slice(0, 10);
+  document.getElementById('s16-checker-result').innerHTML = '';
+  loadCheckerPicker_();
+}
+
+let s16SearchDebounce = null;
+document.getElementById('s16-student-search').addEventListener('input', (e) => {
+  clearTimeout(s16SearchDebounce);
+  const q = e.target.value.trim();
+  const resultsEl = document.getElementById('s16-student-results');
+  if (!q) { resultsEl.innerHTML = ''; return; }
+  s16SearchDebounce = setTimeout(async () => {
+    const r = await api('student.searchAll', { q: q });
+    if (!r.ok) return;
+    resultsEl.innerHTML = r.data.map(s =>
+      '<div class="roster-row" data-pick="' + s.student_id + '" data-name="' + (s.nickname || s.name) + '"><div><div class="name">' + (s.nickname || s.name) + '</div>' +
+      '<div class="meta">' + s.name + ' · ' + s.class + '</div></div></div>'
+    ).join('') || '<div class="empty-state">ไม่พบรายชื่อ</div>';
+    resultsEl.querySelectorAll('[data-pick]').forEach(row => row.addEventListener('click', () => {
+      document.getElementById('s16-student-search').value = row.dataset.name;
+      resultsEl.innerHTML = '';
+      loadStudentTimeline_(row.dataset.pick);
+    }));
+  }, 300);
+});
+
+document.getElementById('s16-student-date').addEventListener('change', () => {
+  if (state.s16StudentId) loadStudentTimeline_(state.s16StudentId);
+});
+
+async function loadStudentTimeline_(studentId) {
+  state.s16StudentId = studentId;
+  const date = document.getElementById('s16-student-date').value;
+  const wrap = document.getElementById('s16-student-timeline');
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  const r = await api('round.byStudent', { studentId: studentId, date: date });
+  if (!r.ok) { wrap.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
+  if (!r.data.timeline.length) { wrap.innerHTML = '<div class="empty-state">วันนั้นยังไม่มีการเช็คเลย</div>'; return; }
+  wrap.innerHTML = r.data.timeline.map(t => (
+    '<div class="roster-row"><div><div class="name">รอบ ' + t.seq + ' ' + t.round_name + '</div>' +
+    '<div class="meta">' + new Date(t.checked_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' · ' + (t.checked_by_name || '—') +
+    (t.duplicate_attempts > 0 ? ' · เช็คซ้ำ ' + t.duplicate_attempts + ' ครั้ง' : '') + '</div></div></div>'
+  )).join('');
+}
+
+async function loadCheckerPicker_() {
+  const sel = document.getElementById('s16-checker-user');
+  sel.innerHTML = '<option value="' + state.profile.user_id + '">ตัวเอง (' + state.profile.name + ')</option>';
+  if (state.permissions.indexOf('user.view') !== -1) {
+    const r = await api('user.list', {});
+    if (r.ok) {
+      r.data.filter(u => u.user_id !== state.profile.user_id).forEach(u => {
+        sel.innerHTML += '<option value="' + u.user_id + '">' + u.display_name + ' (' + u.role_name + ')</option>';
+      });
+    }
+  }
+}
+
+onClickGuarded_('btn-s16-checker-run', async () => {
+  const userId = document.getElementById('s16-checker-user').value;
+  const from = document.getElementById('s16-checker-from').value;
+  const to = document.getElementById('s16-checker-to').value;
+  const wrap = document.getElementById('s16-checker-result');
+  if (!userId) { toast('กรุณาเลือกครู/เจ้าหน้าที่'); return; }
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  const r = await api('round.byChecker', { userId: userId, from: from, to: to });
+  if (!r.ok) { wrap.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
+  const d = r.data;
+  wrap.innerHTML = '<div class="card" style="margin:12px 0;">' +
+    '<div class="card-title">สรุปผลงาน ' + d.from + ' – ' + d.to + '</div>' +
+    '<div class="progress">รอบที่รับผิดชอบ ' + d.roundsResponsible + ' รอบ · เช็ค ' + d.studentsChecked + ' คน</div>' +
+    '<div class="progress">เช็คซ้ำที่ถูกปฏิเสธ ' + d.duplicatesRejected + ' ครั้ง</div>' +
+    (d.incompleteRounds > 0
+      ? '<div style="color:var(--color-duplicate);font-weight:600;margin-top:4px;">' + ic('alert-triangle', 'icon-amber') + ' รอบที่ปิดไม่ครบ ' + d.incompleteRounds + ' รอบ</div>'
+      : '') +
+    '</div>';
+});
 
 document.getElementById('btn-new-round').addEventListener('click', () => openCreateRoundDialog_());
 document.getElementById('dlg-create-round-cancel').addEventListener('click', () => {

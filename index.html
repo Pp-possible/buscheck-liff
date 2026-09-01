@@ -153,6 +153,12 @@
     <path d="M4 20l1-4L16 5l3 3L8 19l-4 1z"/>
     <path d="M13 8l3 3"/>
   </symbol>
+  <symbol id="i-bar-chart" viewBox="0 0 24 24">
+    <path d="M4 20V10"/>
+    <path d="M12 20V4"/>
+    <path d="M20 20v-7"/>
+    <path d="M2 20h20"/>
+  </symbol>
 </svg>
 <div id="debug-panel" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font-size:12px;line-height:1.5;padding:10px;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;"></div>
 <div id="app">
@@ -276,6 +282,35 @@
     </div>
     <div class="sync-indicator" id="s06-sync"></div>
     <div id="s06-list"></div>
+  </section>
+
+  <!-- ============ S-16 รายงาน: ใครเช็คใคร ============ -->
+  <section class="screen" data-screen="S-16">
+    <div class="topbar">
+      <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
+      <div class="title">รายงาน: ใครเช็คใคร</div>
+    </div>
+    <div class="filter-tabs" id="s16-tabs">
+      <div class="chip selected" data-tab="student">รายนักเรียน</div>
+      <div class="chip" data-tab="checker">รายครู</div>
+    </div>
+
+    <div id="s16-student-panel" style="padding:0 16px;">
+      <div class="field" style="margin:0 0 10px;"><input id="s16-student-search" type="text" placeholder="ค้นหาชื่อ/รหัสนักเรียน"></div>
+      <div id="s16-student-results"></div>
+      <div class="field" style="margin:0 0 10px;"><label>วันที่</label><input id="s16-student-date" type="date"></div>
+      <div id="s16-student-timeline"></div>
+    </div>
+
+    <div id="s16-checker-panel" style="display:none;padding:0 16px;">
+      <div class="field" style="margin:0 0 10px;"><label>ครู/เจ้าหน้าที่</label><select id="s16-checker-user"></select></div>
+      <div style="display:flex;gap:10px;">
+        <div class="field" style="flex:1;margin:0 0 10px;"><label>จากวันที่</label><input id="s16-checker-from" type="date"></div>
+        <div class="field" style="flex:1;margin:0 0 10px;"><label>ถึงวันที่</label><input id="s16-checker-to" type="date"></div>
+      </div>
+      <button class="btn btn-primary btn-block" id="btn-s16-checker-run">ดูรายงาน</button>
+      <div id="s16-checker-result"></div>
+    </div>
   </section>
 
   <!-- ============ S-03 หน้าสแกน ============ -->
