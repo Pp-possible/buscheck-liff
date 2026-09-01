@@ -207,6 +207,16 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .tile[data-tile="notifications"] .icon-wrap { --tile-accent: #E74C3C; --tile-accent-bg: rgba(231,76,60,0.15); }
 
 /* ---------- S-02 Round list ---------- */
+/* การ์ดกลุ่ม "รอบเช็ค" — 1 การ์ดต่อ 1 (ชื่อรอบ+ประเภท+วันเวลา) ข้างในมีการ์ดย่อยรายคันรถ */
+.round-group {
+  border: 1px solid var(--border); border-radius: 14px; margin: 10px 16px;
+  background: var(--bg-elevated); box-shadow: var(--shadow); overflow: hidden;
+}
+.round-group-header {
+  padding: 12px 14px; font-weight: 700; font-size: 14px;
+  background: var(--card-bg); border-bottom: 1px solid var(--border);
+}
+.round-group .round-item { margin: 8px; }
 .round-item {
   border: 1px solid var(--border); border-radius: 12px; margin: 10px 16px;
   background: var(--color-error); box-shadow: var(--shadow);

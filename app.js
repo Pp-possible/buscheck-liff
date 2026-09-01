@@ -589,6 +589,22 @@ document.getElementById('btn-refresh-rounds').addEventListener('click', () => lo
 
 const ROUND_TYPE_LABELS_ = { BOARD: 'ขึ้นรถ', DROP: 'ลงรถ', HEADCOUNT: 'นับยอด', ACTIVITY: 'กิจกรรม' };
 
+// จัดกลุ่มรอบที่ ชื่อรอบ+ประเภท+วันเวลา ตรงกันเป๊ะไว้การ์ดเดียวกัน (คนละคันรถ) — คีย์นี้คำนวณจากข้อมูล
+// รอบที่มีอยู่แล้วล้วน ๆ ไม่ต้องมี field ใหม่ฝั่ง Firestore ถ้าแก้เวลา/ชื่อของคันใดคันหนึ่งภายหลัง
+// จนไม่ตรงกับพี่น้องคันอื่นแล้ว ก็แค่หลุดไปอยู่การ์ดของตัวเอง ไม่ต้องจัดการอะไรเป็นพิเศษ
+function groupRoundsForDisplay_(rounds) {
+  const groups = {}; const order = [];
+  rounds.forEach(r => {
+    const key = r.round_name + '|' + r.round_type + '|' + r.scheduled_at;
+    if (!groups[key]) { groups[key] = { round_name: r.round_name, round_type: r.round_type, scheduled_at: r.scheduled_at, rounds: [] }; order.push(key); }
+    groups[key].rounds.push(r);
+  });
+  const list = order.map(k => groups[k]);
+  list.sort((a, b) => String(b.scheduled_at || '').localeCompare(String(a.scheduled_at || ''))); // ใหม่ไปเก่า
+  list.forEach(g => g.rounds.sort((a, b) => Number(a.seq) - Number(b.seq)));
+  return list;
+}
+
 function renderRoundsList_(rounds, opts) {
   opts = opts || {};
   const archivedList = !!opts.archived;
@@ -605,45 +621,53 @@ function renderRoundsList_(rounds, opts) {
   const canEdit = state.permissions && state.permissions.indexOf('round.edit') !== -1;
   const canAssign = state.permissions && state.permissions.indexOf('round.assign') !== -1;
 
-  list.innerHTML = rounds.map(round => {
-    const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
-    const statusLabel = round.status === 'OPEN' ? 'เปิดอยู่' : round.status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
-    const checkers = round.checkers.map(c => c.name).join(' + ') || ('ยังไม่มอบหมายผู้เช็ค ' + ic('alert-triangle', 'icon-amber'));
-    const isPlanned = round.status === 'PLANNED';
-    const isClosed = round.status === 'CLOSED';
-    const busLabel = (state.busMap && state.busMap[round.scope_id]) || round.scope_id || '';
-    const typeLabel = ROUND_TYPE_LABELS_[round.round_type] || round.round_type;
+  const groups = groupRoundsForDisplay_(rounds);
 
-    // สลับ swipe: รอบใน "วันนี้" ที่ยัง PLANNED → ปัดลบได้เลย (ยังไม่มีข้อมูลเช็ค);
-    // รอบที่ OPEN/CLOSED แล้ว → ปัดเก็บเข้าประวัติแทน (ย้อนกลับได้ ไม่ทำลายข้อมูล);
-    // อยู่ในหน้าประวัติอยู่แล้ว → ปัดคืนกลับไปหน้ารอบเช็ควันนี้
-    let swipeAction = null;
-    if (canManage) {
-      if (archivedList) swipeAction = { attr: 'data-restore', label: 'คืน', zoneClass: 'restore-zone', bgClass: 'archive-zone-bg' };
-      else if (isPlanned) swipeAction = { attr: 'data-delete', label: 'ลบ', zoneClass: '', bgClass: '' };
-      else swipeAction = { attr: 'data-archive', label: 'เก็บ', zoneClass: 'archive-zone', bgClass: 'archive-zone-bg' };
-    }
+  list.innerHTML = groups.map(group => {
+    const typeLabel = ROUND_TYPE_LABELS_[group.round_type] || group.round_type;
+    const busItemsHtml = group.rounds.map(round => {
+      const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
+      const statusLabel = round.status === 'OPEN' ? 'เปิดอยู่' : round.status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
+      const checkers = round.checkers.map(c => c.name).join(' + ') || ('ยังไม่มอบหมายผู้เช็ค ' + ic('alert-triangle', 'icon-amber'));
+      const isPlanned = round.status === 'PLANNED';
+      const isClosed = round.status === 'CLOSED';
+      const busLabel = (state.busMap && state.busMap[round.scope_id]) || round.scope_id || '';
 
-    let html = '<div class="round-item ' + statusClass + (swipeAction ? ' ' + swipeAction.bgClass : '') + '" data-round="' + round.round_id + '" data-status="' + round.status + '">';
-    if (swipeAction) {
-      html += '<div class="round-item-actions ' + swipeAction.zoneClass + '" ' + swipeAction.attr + '="' + round.round_id + '">' + swipeAction.label + '</div>';
-      html += '<div class="round-item-content swipeable">';
-    } else {
-      html += '<div class="round-item-content">';
-    }
+      // สลับ swipe: รอบใน "วันนี้" ที่ยัง PLANNED → ปัดลบได้เลย (ยังไม่มีข้อมูลเช็ค);
+      // รอบที่ OPEN/CLOSED แล้ว → ปัดเก็บเข้าประวัติแทน (ย้อนกลับได้ ไม่ทำลายข้อมูล);
+      // อยู่ในหน้าประวัติอยู่แล้ว → ปัดคืนกลับไปหน้ารอบเช็ควันนี้
+      let swipeAction = null;
+      if (canManage) {
+        if (archivedList) swipeAction = { attr: 'data-restore', label: 'คืน', zoneClass: 'restore-zone', bgClass: 'archive-zone-bg' };
+        else if (isPlanned) swipeAction = { attr: 'data-delete', label: 'ลบ', zoneClass: '', bgClass: '' };
+        else swipeAction = { attr: 'data-archive', label: 'เก็บ', zoneClass: 'archive-zone', bgClass: 'archive-zone-bg' };
+      }
 
-    html += '<div class="row1"><span class="status-badge">' + (busLabel || '—') + '</span> ' + round.seq + '. ' + round.round_name + ' — ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
-      '<div class="progress">' + formatThaiDateTime_(round.scheduled_at) + ' · ' + typeLabel + '</div>' +
-      '<div class="progress">' + checkers + '</div>' +
-      (round.duplicateAttempts > 0 ? '<div class="warn">' + ic('alert-triangle') + ' มีการเช็คซ้ำ ' + round.duplicateAttempts + ' ครั้ง</div>' : '') +
-      (isPlanned && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
-      (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
-      (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
-      ((isPlanned || round.status === 'OPEN') && canEdit ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
-      (!isClosed && canAssign ? '<button class="btn btn-secondary" style="margin-top:8px" data-assign="' + round.round_id + '">มอบหมายผู้เช็ค</button>' : '') +
-      (canManage && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-duplicate="' + round.round_id + '">ทำซ้ำ</button>' : '') +
-      '</div></div>';
-    return html;
+      let html = '<div class="round-item ' + statusClass + (swipeAction ? ' ' + swipeAction.bgClass : '') + '" data-round="' + round.round_id + '" data-status="' + round.status + '">';
+      if (swipeAction) {
+        html += '<div class="round-item-actions ' + swipeAction.zoneClass + '" ' + swipeAction.attr + '="' + round.round_id + '">' + swipeAction.label + '</div>';
+        html += '<div class="round-item-content swipeable">';
+      } else {
+        html += '<div class="round-item-content">';
+      }
+
+      html += '<div class="row1"><span class="status-badge">' + (busLabel || '—') + '</span> ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
+        '<div class="progress">' + checkers + '</div>' +
+        (round.duplicateAttempts > 0 ? '<div class="warn">' + ic('alert-triangle') + ' มีการเช็คซ้ำ ' + round.duplicateAttempts + ' ครั้ง</div>' : '') +
+        (isPlanned && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
+        (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
+        (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
+        ((isPlanned || round.status === 'OPEN') && canEdit ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
+        (!isClosed && canAssign ? '<button class="btn btn-secondary" style="margin-top:8px" data-assign="' + round.round_id + '">มอบหมายผู้เช็ค</button>' : '') +
+        (canManage && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-duplicate="' + round.round_id + '">ทำซ้ำ</button>' : '') +
+        '</div></div>';
+      return html;
+    }).join('');
+
+    return '<div class="round-group">' +
+      '<div class="round-group-header">' + formatThaiDateTime_(group.scheduled_at) + ' · ' + typeLabel + ' · ' + group.round_name + '</div>' +
+      busItemsHtml +
+      '</div>';
   }).join('');
 
   const afterChange = () => { if (archivedList) loadRoundHistory_({ silent: true }); else loadRounds_({ silent: true }); };
@@ -1221,6 +1245,7 @@ document.getElementById('btn-new-round').addEventListener('click', () => openCre
 document.getElementById('dlg-create-round-cancel').addEventListener('click', () => {
   document.getElementById('dlg-create-round').classList.remove('show');
 });
+document.getElementById('dlg-create-round-back').addEventListener('click', () => showCreateRoundStep_(1));
 
 function nowForDatetimeLocal_() {
   const d = new Date();
@@ -1228,53 +1253,111 @@ function nowForDatetimeLocal_() {
   return d.toISOString().slice(0, 16);
 }
 
+// สลับขั้นตอนของ dialog สร้างรอบ — โหมดแก้ไขมีขั้นตอนเดียว (ไม่มีขั้นที่ 2 เพราะแก้ได้แค่คันเดียวที่มีอยู่แล้ว)
+// โหมดสร้างใหม่/ทำซ้ำ ขั้นที่ 1 = ชื่อ/ประเภท/เวลา ขั้นที่ 2 = เลือกรถ (เลือกได้หลายคัน สร้างพร้อมกันทีเดียว)
+function showCreateRoundStep_(step) {
+  state.crStep = step;
+  document.getElementById('cr-step1').style.display = step === 1 ? 'block' : 'none';
+  document.getElementById('cr-step2').style.display = step === 2 ? 'block' : 'none';
+  document.getElementById('dlg-create-round-cancel').style.display = step === 1 ? 'inline-flex' : 'none';
+  document.getElementById('dlg-create-round-back').style.display = step === 2 ? 'inline-flex' : 'none';
+  const submitBtn = document.getElementById('dlg-create-round-submit');
+  submitBtn.textContent = state.crMode === 'edit' ? 'บันทึก' : (step === 1 ? 'ถัดไป' : 'สร้างรอบ');
+}
+
 // existingRound: ไม่ใส่ = สร้างใหม่, ใส่ + duplicate=false = แก้ไขรอบเดิม, ใส่ + duplicate=true = ทำซ้ำเป็นรอบใหม่
 async function openCreateRoundDialog_(existingRound, duplicate) {
-  const busSel = document.getElementById('cr-bus');
-  busSel.innerHTML = '<option value="">กำลังโหลด...</option>';
-  document.getElementById('dlg-create-round-title').textContent = existingRound && !duplicate ? 'แก้ไขรอบเช็ค' : 'สร้างรอบเช็คใหม่';
-  document.getElementById('dlg-create-round-submit').textContent = existingRound && !duplicate ? 'บันทึก' : 'สร้างรอบ';
-  document.getElementById('cr-round-id').value = existingRound && !duplicate ? existingRound.round_id : '';
+  const isEdit = !!(existingRound && !duplicate);
+  state.crMode = isEdit ? 'edit' : 'create';
+
+  document.getElementById('dlg-create-round-title').textContent = isEdit ? 'แก้ไขรอบเช็ค' : 'สร้างรอบเช็คใหม่';
+  document.getElementById('cr-round-id').value = isEdit ? existingRound.round_id : '';
   document.getElementById('cr-name').value = existingRound ? existingRound.round_name : '';
   document.getElementById('cr-type').value = existingRound ? existingRound.round_type : 'BOARD';
-  document.getElementById('cr-type').disabled = !!(existingRound && !duplicate); // แก้ประเภทรอบเดิมไม่ได้ (round.update ไม่รองรับ) — ทำซ้ำเป็นรอบใหม่แทนถ้าอยากเปลี่ยน
+  document.getElementById('cr-type').disabled = isEdit; // แก้ประเภทรอบเดิมไม่ได้ (round.update ไม่รองรับ) — ทำซ้ำเป็นรอบใหม่แทนถ้าอยากเปลี่ยน
   document.getElementById('cr-scheduled-at').value = (existingRound && existingRound.scheduled_at) ? existingRound.scheduled_at.slice(0, 16) : nowForDatetimeLocal_();
   document.getElementById('cr-require-all').checked = existingRound ? existingRound.require_all : true;
+  document.getElementById('cr-edit-bus-field').style.display = isEdit ? 'block' : 'none';
   document.getElementById('dlg-create-round').classList.add('show');
+  showCreateRoundStep_(1);
+
+  const busSelEdit = document.getElementById('cr-bus');
+  const busMulti = document.getElementById('cr-bus-multi');
+  busSelEdit.innerHTML = '<option value="">กำลังโหลด...</option>';
+  busMulti.innerHTML = '<div class="empty-state" style="padding:10px;">กำลังโหลด...</div>';
 
   const r = await api('me.buses', {});
-  if (!r.ok) { toast('โหลดรายการรถไม่ได้: ' + r.error.message); busSel.innerHTML = '<option value="">(โหลดไม่สำเร็จ)</option>'; return; }
+  if (!r.ok) { toast('โหลดรายการรถไม่ได้: ' + r.error.message); busSelEdit.innerHTML = '<option value="">(โหลดไม่สำเร็จ)</option>'; return; }
   const buses = r.data || [];
-  state.busMap = {};
+  state.busMap = state.busMap || {};
   buses.forEach(b => { state.busMap[b.bus_id] = b.bus_name || b.bus_code; });
-  busSel.innerHTML = buses.map(b => '<option value="' + b.bus_id + '">' + b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</option>').join('') || '<option value="">(ไม่มีรถในขอบเขตของคุณ)</option>';
-  if (existingRound && buses.some(b => b.bus_id === existingRound.scope_id)) busSel.value = existingRound.scope_id;
+
+  if (isEdit) {
+    busSelEdit.innerHTML = buses.map(b => '<option value="' + b.bus_id + '">' + b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</option>').join('') || '<option value="">(ไม่มีรถในขอบเขตของคุณ)</option>';
+    if (buses.some(b => b.bus_id === existingRound.scope_id)) busSelEdit.value = existingRound.scope_id;
+  } else {
+    busMulti.innerHTML = buses.map(b =>
+      '<div class="chip' + (duplicate && existingRound.scope_id === b.bus_id ? ' selected' : '') + '" data-bus="' + b.bus_id + '">' +
+      b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</div>'
+    ).join('') || '<div class="empty-state">ไม่มีรถในขอบเขตของคุณ</div>';
+    busMulti.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => c.classList.toggle('selected')));
+  }
+}
+
+// เตือนถ้ามีรอบชื่อ+ประเภท+เวลาเดียวกันอยู่แล้ว กันตั้งรอบซ้ำเวลาเดียวกันหลายครั้งโดยไม่ตั้งใจ — เป็นแค่คำเตือน
+// ไม่บล็อกเด็ดขาด เผื่อบางครั้งตั้งใจสร้างซ้ำจริง ๆ (เช่น เที่ยวเสริม) ให้ยืนยันอีกทีก่อนเท่านั้น
+function warnIfDuplicateRoundTime_(scheduledAt, roundType, roundName) {
+  const existing = Object.values(state.roundsById || {}).some(r =>
+    r.scheduled_at === scheduledAt && r.round_type === roundType && r.round_name === roundName
+  );
+  if (!existing) return true;
+  return confirm('มีรอบ "' + roundName + '" เวลานี้อยู่แล้ว ต้องการสร้างซ้ำอีกหรือไม่?');
 }
 
 onClickGuarded_('dlg-create-round-submit', async () => {
   const roundName = document.getElementById('cr-name').value.trim();
-  const busId = document.getElementById('cr-bus').value;
   const scheduledAt = document.getElementById('cr-scheduled-at').value;
   const roundId = document.getElementById('cr-round-id').value;
   if (!roundName) { toast('กรุณาระบุชื่อรอบ'); return; }
-  if (!busId) { toast('กรุณาเลือกรถ'); return; }
   if (!scheduledAt) { toast('กรุณาระบุวันที่และเวลาตรวจยอด'); return; }
 
-  const r = roundId
-    ? await api('round.update', {
-        roundId: roundId, roundName: roundName, scopeId: busId, scheduledAt: scheduledAt,
-        requireAll: document.getElementById('cr-require-all').checked
-      })
-    : await api('round.create', {
-        scheduledAt: scheduledAt, scopeType: 'BUS', scopeId: busId,
-        roundName: roundName, roundType: document.getElementById('cr-type').value,
-        requireAll: document.getElementById('cr-require-all').checked
-      });
-  if (!r.ok) { toast(r.error.message); return; }
+  if (roundId) {
+    // โหมดแก้ไข — ขั้นตอนเดียว
+    const busId = document.getElementById('cr-bus').value;
+    if (!busId) { toast('กรุณาเลือกรถ'); return; }
+    const r = await api('round.update', {
+      roundId: roundId, roundName: roundName, scopeId: busId, scheduledAt: scheduledAt,
+      requireAll: document.getElementById('cr-require-all').checked
+    });
+    if (!r.ok) { toast(r.error.message); return; }
+    document.getElementById('dlg-create-round').classList.remove('show');
+    toast('บันทึกการแก้ไขแล้ว');
+    loadRounds_({ silent: true });
+    return;
+  }
+
+  if (state.crStep === 1) {
+    if (!warnIfDuplicateRoundTime_(scheduledAt, document.getElementById('cr-type').value, roundName)) return;
+    showCreateRoundStep_(2);
+    return;
+  }
+
+  const busIds = Array.from(document.querySelectorAll('#cr-bus-multi .chip.selected')).map(c => c.dataset.bus);
+  if (!busIds.length) { toast('กรุณาเลือกรถอย่างน้อย 1 คัน'); return; }
+
+  const roundType = document.getElementById('cr-type').value;
+  const requireAll = document.getElementById('cr-require-all').checked;
+  let created = 0; const failed = [];
+  for (const busId of busIds) {
+    // eslint-disable-next-line no-await-in-loop
+    const r = await api('round.create', { scheduledAt: scheduledAt, scopeType: 'BUS', scopeId: busId, roundName: roundName, roundType: roundType, requireAll: requireAll });
+    if (r.ok) created++; else failed.push((state.busMap[busId] || busId) + ': ' + r.error.message);
+  }
 
   document.getElementById('dlg-create-round').classList.remove('show');
   document.getElementById('cr-name').value = '';
-  toast(roundId ? 'บันทึกการแก้ไขแล้ว' : 'สร้างรอบแล้ว — อย่าลืมมอบหมายผู้เช็คก่อนเปิดรอบ');
+  if (failed.length) toast('สร้างสำเร็จ ' + created + ' คัน — ผิดพลาด: ' + failed.join(', '));
+  else toast('สร้างรอบให้ ' + created + ' คันแล้ว — อย่าลืมมอบหมายผู้เช็คก่อนเปิดรอบ');
   loadRounds_({ silent: true });
 });
 

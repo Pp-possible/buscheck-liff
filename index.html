@@ -608,27 +608,41 @@
   <div class="dialog">
     <h3 id="dlg-create-round-title">สร้างรอบเช็คใหม่</h3>
     <input type="hidden" id="cr-round-id" value="">
-    <div class="field" style="margin:0 0 10px;"><label>ชื่อรอบ *</label><input id="cr-name" type="text" placeholder="เช่น เช็คยอดพิเศษ"></div>
-    <div class="field" style="margin:0 0 10px;">
-      <label>ประเภท *</label>
-      <select id="cr-type">
-        <option value="BOARD">ขึ้นรถ (BOARD)</option>
-        <option value="DROP">ลงรถ (DROP)</option>
-        <option value="HEADCOUNT">นับยอด (HEADCOUNT)</option>
-        <option value="ACTIVITY">กิจกรรม (ACTIVITY)</option>
-      </select>
+
+    <!-- ขั้นที่ 1: ชื่อรอบ/ประเภท/เวลา — ตอนแก้ไขรอบเดิม (โหมดเดียว ไม่มีขั้นที่ 2) จะมีช่องเลือกรถคันเดียวโผล่มาด้วย -->
+    <div id="cr-step1">
+      <div class="field" style="margin:0 0 10px;"><label>ชื่อรอบ *</label><input id="cr-name" type="text" placeholder="เช่น เช็คยอดพิเศษ"></div>
+      <div class="field" style="margin:0 0 10px;">
+        <label>ประเภท *</label>
+        <select id="cr-type">
+          <option value="BOARD">ขึ้นรถ (BOARD)</option>
+          <option value="DROP">ลงรถ (DROP)</option>
+          <option value="HEADCOUNT">นับยอด (HEADCOUNT)</option>
+          <option value="ACTIVITY">กิจกรรม (ACTIVITY)</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0 0 10px;">
+        <label>วันที่และเวลาตรวจยอด *</label>
+        <input id="cr-scheduled-at" type="datetime-local">
+      </div>
+      <div class="field" id="cr-edit-bus-field" style="margin:0 0 10px;display:none;"><label>รถ *</label><select id="cr-bus"></select></div>
+      <div class="field" style="margin:0 0 10px;">
+        <label><input type="checkbox" id="cr-require-all" checked> ต้องเช็คครบทุกคนถึงจะปิดรอบได้</label>
+      </div>
     </div>
-    <div class="field" style="margin:0 0 10px;"><label>รถ *</label><select id="cr-bus"></select></div>
-    <div class="field" style="margin:0 0 10px;">
-      <label>วันที่และเวลาตรวจยอด *</label>
-      <input id="cr-scheduled-at" type="datetime-local">
+
+    <!-- ขั้นที่ 2: เลือกรถ (เฉพาะสร้างใหม่/ทำซ้ำ — เลือกได้หลายคัน สร้างรอบให้พร้อมกันทีเดียว) -->
+    <div id="cr-step2" style="display:none;">
+      <div class="field" style="margin:0 0 10px;">
+        <label>เลือกรถที่จะให้มีรอบนี้ (เลือกได้หลายคัน) *</label>
+        <div class="chip-group" id="cr-bus-multi"></div>
+      </div>
     </div>
-    <div class="field" style="margin:0 0 10px;">
-      <label><input type="checkbox" id="cr-require-all" checked> ต้องเช็คครบทุกคนถึงจะปิดรอบได้</label>
-    </div>
+
     <div class="dialog-actions">
       <button class="btn btn-secondary" id="dlg-create-round-cancel">ยกเลิก</button>
-      <button class="btn btn-primary" id="dlg-create-round-submit">สร้างรอบ</button>
+      <button class="btn btn-secondary" id="dlg-create-round-back" style="display:none;">ย้อนกลับ</button>
+      <button class="btn btn-primary" id="dlg-create-round-submit">ถัดไป</button>
     </div>
   </div>
 </div>
