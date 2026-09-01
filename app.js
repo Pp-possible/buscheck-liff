@@ -276,7 +276,7 @@ async function boot() {
     if (!r.ok) {
       if (r.error.code === 'E_PENDING_APPROVAL') { toast(r.error.message); return; }
       if (!cachedHome) toast(r.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
-      else { toast('เชื่อมต่อไม่ได้: [' + r.error.code + '] ' + r.error.message, 8000); setSyncBadge_('s01-sync', 'error'); }
+      else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
       return;
     }
 
@@ -685,7 +685,7 @@ async function openCreateRoundDialog_(existingRound, duplicate) {
   document.getElementById('cr-name').value = existingRound ? existingRound.round_name : '';
   document.getElementById('cr-type').value = existingRound ? existingRound.round_type : 'BOARD';
   document.getElementById('cr-type').disabled = !!(existingRound && !duplicate); // แก้ประเภทรอบเดิมไม่ได้ (round.update ไม่รองรับ) — ทำซ้ำเป็นรอบใหม่แทนถ้าอยากเปลี่ยน
-  document.getElementById('cr-scheduled-at').value = existingRound ? existingRound.scheduled_at.slice(0, 16) : nowForDatetimeLocal_();
+  document.getElementById('cr-scheduled-at').value = (existingRound && existingRound.scheduled_at) ? existingRound.scheduled_at.slice(0, 16) : nowForDatetimeLocal_();
   document.getElementById('cr-require-all').checked = existingRound ? existingRound.require_all : true;
   document.getElementById('dlg-create-round').classList.add('show');
 
@@ -1154,7 +1154,7 @@ function renderBusList_(buses) {
     '<div style="flex:1">' +
     '<div class="name">🚌 รถ ' + b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</div>' +
     '<div class="meta">' +
-    (b.license_plate ? 'ทะเบียน ' + b.license_plate + ' · ' : '') +
+    (b.plate_no ? 'ทะเบียน ' + b.plate_no + ' · ' : '') +
     'จุ ' + (b.capacity || '—') + ' คน' +
     ' · นักเรียน ' + b.student_count + ' คน' +
     (b.is_active ? '' : ' · ปิดใช้งาน') +
@@ -1214,7 +1214,7 @@ function openBusDialog_(bus) {
   document.getElementById('be-bus-id').value = isEdit ? bus.bus_id : '';
   document.getElementById('be-code').value = isEdit ? bus.bus_code : '';
   document.getElementById('be-name').value = isEdit ? (bus.bus_name && bus.bus_name !== bus.bus_code ? bus.bus_name : '') : '';
-  document.getElementById('be-plate').value = isEdit ? (bus.license_plate || '') : '';
+  document.getElementById('be-plate').value = isEdit ? (bus.plate_no || '') : '';
   document.getElementById('be-cap').value = isEdit ? (bus.capacity || '') : '';
   document.getElementById('be-note').value = isEdit ? (bus.note || '') : '';
   document.getElementById('be-order').value = isEdit ? (bus.sort_order != null ? bus.sort_order : '') : '';
@@ -1232,7 +1232,7 @@ document.getElementById('dlg-bus-save').addEventListener('click', async () => {
   const payload = {
     busCode,
     busName: document.getElementById('be-name').value.trim(),
-    licensePlate: document.getElementById('be-plate').value.trim(),
+    plateNo: document.getElementById('be-plate').value.trim(),
     capacity: document.getElementById('be-cap').value,
     note: document.getElementById('be-note').value.trim(),
     sortOrder: document.getElementById('be-order').value
