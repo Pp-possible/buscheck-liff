@@ -147,14 +147,19 @@ document.addEventListener('click', (e) => {
 async function api(action, payload) {
   const body = { action: action, sessionToken: state.sessionToken, payload: payload || {} };
   let res;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 8000); // เชื่อมต่อค้าง (เช่น connection ตายเงียบใน webview) ต้องไม่แขวนถาวร
   try {
     res = await fetch(CFG.GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: ac.signal
     });
   } catch (networkErr) {
     return { ok: false, data: null, error: { code: 'E_NETWORK', message: 'เชื่อมต่อไม่ได้ กรุณาตรวจสอบสัญญาณอินเทอร์เน็ต' } };
+  } finally {
+    clearTimeout(timer);
   }
   let json;
   try { json = await res.json(); } catch (e) {
