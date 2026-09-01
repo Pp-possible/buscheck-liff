@@ -44,6 +44,8 @@
   stroke-linecap: round; stroke-linejoin: round;
 }
 .icon-amber { color: var(--color-drop); }
+.progress-bar { height: 10px; border-radius: 999px; background: var(--bg-elevated); overflow: hidden; }
+.progress-bar-fill { height: 100%; background: var(--color-board); border-radius: 999px; transition: width 0.3s ease; }
 .icon-error { color: var(--color-error); }
 .icon-ok { color: var(--color-board); }
 .icon-muted { color: var(--text-muted); }

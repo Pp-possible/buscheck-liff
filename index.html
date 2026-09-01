@@ -159,6 +159,15 @@
     <path d="M20 20v-7"/>
     <path d="M2 20h20"/>
   </symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24">
+    <rect x="6" y="4" width="12" height="17" rx="2"/>
+    <rect x="9" y="2" width="6" height="4" rx="1"/>
+    <path d="M9 11h6M9 15h6"/>
+  </symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24">
+    <path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6z"/>
+    <path d="M10 20a2 2 0 0 0 4 0"/>
+  </symbol>
 </svg>
 <div id="debug-panel" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font-size:12px;line-height:1.5;padding:10px;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;"></div>
 <div id="app">
@@ -311,6 +320,65 @@
       <button class="btn btn-primary btn-block" id="btn-s16-checker-run">ดูรายงาน</button>
       <div id="s16-checker-result"></div>
     </div>
+  </section>
+
+  <!-- ============ S-07 สรุปยอดวัน + หน้ากระทบยอด ============ -->
+  <section class="screen" data-screen="S-07">
+    <div class="topbar">
+      <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
+      <div class="title">สรุปยอดวัน</div>
+      <button class="back" id="btn-refresh-daysummary" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
+    </div>
+    <div class="mode-toggle" style="margin:12px 16px 0;">
+      <button id="s07-dir-am" class="active board">รอบเช้า</button>
+      <button id="s07-dir-pm" class="drop">รอบเย็น</button>
+    </div>
+    <div class="sync-indicator" id="s07-sync"></div>
+    <div id="s07-summary"></div>
+    <div id="s07-reconcile"></div>
+  </section>
+
+  <!-- ============ S-12 จัดการผู้ใช้และสิทธิ์ ============ -->
+  <section class="screen" data-screen="S-12">
+    <div class="topbar">
+      <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
+      <div class="title">ผู้ใช้ระบบ</div>
+      <button class="back" id="btn-refresh-users" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
+    </div>
+    <div class="search-bar"><input id="s12-search" type="text" placeholder="ค้นหาชื่อ"></div>
+    <div class="filter-tabs" id="s12-tabs">
+      <div class="chip selected" data-status="ACTIVE">ใช้งานอยู่</div>
+      <div class="chip" data-status="SUSPENDED">ระงับ</div>
+      <div class="chip" data-status="">ทั้งหมด</div>
+    </div>
+    <div class="sync-indicator" id="s12-sync"></div>
+    <div id="s12-list"></div>
+  </section>
+
+  <!-- ============ S-17 กล่องรออนุมัติ ============ -->
+  <section class="screen" data-screen="S-17">
+    <div class="topbar">
+      <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
+      <div class="title">รออนุมัติ</div>
+      <button class="back" id="btn-refresh-approvals" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
+    </div>
+    <div class="sync-indicator" id="s17-sync"></div>
+    <div id="s17-list"></div>
+  </section>
+
+  <!-- ============ S-13 ศูนย์แจ้งเตือน ============ -->
+  <section class="screen" data-screen="S-13">
+    <div class="topbar">
+      <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
+      <div class="title">ศูนย์แจ้งเตือน</div>
+      <button class="back" id="btn-refresh-alerts" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
+    </div>
+    <div class="filter-tabs" id="s13-tabs">
+      <div class="chip selected" data-status="OPEN">ยังไม่รับทราบ</div>
+      <div class="chip" data-status="">ทั้งหมด</div>
+    </div>
+    <div class="sync-indicator" id="s13-sync"></div>
+    <div id="s13-list"></div>
   </section>
 
   <!-- ============ S-03 หน้าสแกน ============ -->
@@ -597,6 +665,30 @@
     <div class="dialog-actions">
       <button class="btn btn-secondary" id="dlg-bus-cancel">ยกเลิก</button>
       <button class="btn btn-primary" id="dlg-bus-save">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Dialog: มอบหมายผู้เช็ค ============ -->
+<div class="overlay" id="dlg-assign-round">
+  <div class="dialog">
+    <h3>มอบหมายผู้เช็ค</h3>
+    <div id="dlg-assign-current" style="margin-bottom:12px;"></div>
+    <input type="hidden" id="assign-round-id">
+    <div class="field" style="margin:0 0 10px;">
+      <label>เพิ่มผู้เช็ค</label>
+      <select id="assign-user-select"></select>
+    </div>
+    <div class="field" style="margin:0 0 10px;">
+      <label>บทบาท</label>
+      <select id="assign-role-select">
+        <option value="LEAD">หัวหน้ารอบ (LEAD)</option>
+        <option value="ASSIST">ผู้ช่วย (ASSIST)</option>
+      </select>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="dlg-assign-cancel">ปิด</button>
+      <button class="btn btn-primary" id="dlg-assign-add">เพิ่ม</button>
     </div>
   </div>
 </div>

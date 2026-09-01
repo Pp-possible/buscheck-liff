@@ -11,7 +11,10 @@ function ic(name, cls) {
 }
 
 // ต้องประกาศก่อน boot() เรียกใช้ (renderHomeFromData_ อาจถูกเรียกจาก boot() ทันทีถ้ามีแคชอยู่แล้ว)
-const TILE_ICONS = { scan: ic('camera'), vouchQr: ic('id-card'), myRounds: ic('list'), manageBus: ic('bus'), report: ic('bar-chart') };
+const TILE_ICONS = {
+  scan: ic('camera'), vouchQr: ic('id-card'), myRounds: ic('list'), manageBus: ic('bus'), report: ic('bar-chart'),
+  daySummary: ic('clipboard'), users: ic('user'), approvals: ic('clock'), notifications: ic('bell')
+};
 
 const state = {
   sessionToken: null,
@@ -547,6 +550,10 @@ function navigateTile_(route) {
   else if (route === 'S-19') { showScreen('S-19'); startVouchQrLoop_(); }
   else if (route === 'S-20') { showScreen('S-20'); loadBuses_(); }
   else if (route === 'S-16') { showScreen('S-16'); initReportScreen_(); }
+  else if (route === 'S-07') { showScreen('S-07'); initDaySummaryScreen_(); }
+  else if (route === 'S-12') { showScreen('S-12'); loadUsersList_(); }
+  else if (route === 'S-17') { showScreen('S-17'); loadApprovalsList_(); }
+  else if (route === 'S-13') { showScreen('S-13'); loadAlertsList_(); }
 }
 
 async function renderHome_(opts) {
@@ -596,6 +603,7 @@ function renderRoundsList_(rounds, opts) {
 
   const canManage = state.permissions && state.permissions.indexOf('round.open') !== -1;
   const canEdit = state.permissions && state.permissions.indexOf('round.edit') !== -1;
+  const canAssign = state.permissions && state.permissions.indexOf('round.assign') !== -1;
 
   list.innerHTML = rounds.map(round => {
     const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
@@ -632,6 +640,7 @@ function renderRoundsList_(rounds, opts) {
       (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
       (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
       ((isPlanned || round.status === 'OPEN') && canEdit ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
+      (!isClosed && canAssign ? '<button class="btn btn-secondary" style="margin-top:8px" data-assign="' + round.round_id + '">มอบหมายผู้เช็ค</button>' : '') +
       (canManage && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-duplicate="' + round.round_id + '">ทำซ้ำ</button>' : '') +
       '</div></div>';
     return html;
@@ -643,6 +652,7 @@ function renderRoundsList_(rounds, opts) {
   list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
   list.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.edit], false)));
   list.querySelectorAll('[data-duplicate]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.duplicate], true)));
+  list.querySelectorAll('[data-assign]').forEach(btn => btn.addEventListener('click', () => openAssignDialog_(btn.dataset.assign)));
   list.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
     if (!confirm('ยืนยันลบรอบเช็คนี้?')) return;
     const roundId = e.currentTarget.dataset.delete;
@@ -866,6 +876,360 @@ onClickGuarded_('btn-s16-checker-run', async () => {
       : '') +
     '</div>';
 });
+
+// ---------------------------------------------------------------------------
+// S-07 สรุปยอดวัน + หน้ากระทบยอด "ใครหาย เพราะอะไร"
+// ---------------------------------------------------------------------------
+
+// จับคู่ reason_code → day_status เป้าหมายตาม Reasons.applies_to (ดู schema.js REASON_DEFAULTS) —
+// ไม่มี action ให้ดึงชีทนี้ผ่าน API จึงต้องจับคู่ตรงนี้ให้ตรงกับค่าที่ seed ไว้จริง
+const REASON_STATUS_MAP_ = {
+  SICK: 'ABSENT', LEAVE: 'ABSENT', PARENT_PICKUP: 'EXCUSED', OTHER_BUS_CONFIRMED: 'UNRESOLVED',
+  PICKED_UP_AT_SCHOOL: 'EXCUSED', SCAN_MISSED: 'UNRESOLVED', STILL_SEARCHING: 'UNRESOLVED'
+};
+const REASON_LABELS_ = {
+  SICK: 'ป่วย', LEAVE: 'ลากิจ', PARENT_PICKUP: 'ผู้ปกครองรับเอง', OTHER_BUS_CONFIRMED: 'ยืนยันแล้วว่าขึ้นรถคันอื่น',
+  PICKED_UP_AT_SCHOOL: 'ผู้ปกครองมารับที่โรงเรียน', SCAN_MISSED: 'ขึ้น-ลงจริงแต่ลืมสแกน', STILL_SEARCHING: 'ยังตามหาอยู่'
+};
+
+document.getElementById('s07-dir-am').addEventListener('click', () => switchDaySummaryDirection_('AM'));
+document.getElementById('s07-dir-pm').addEventListener('click', () => switchDaySummaryDirection_('PM'));
+document.getElementById('btn-refresh-daysummary').addEventListener('click', () => loadDaySummary_());
+
+function switchDaySummaryDirection_(dir) {
+  state.s07Direction = dir;
+  document.getElementById('s07-dir-am').classList.toggle('active', dir === 'AM');
+  document.getElementById('s07-dir-pm').classList.toggle('active', dir === 'PM');
+  loadDaySummary_();
+}
+
+function initDaySummaryScreen_() {
+  const nowHour = new Date().getHours();
+  switchDaySummaryDirection_(nowHour < 12 ? 'AM' : 'PM');
+}
+
+function statRow_(label, n, cls) {
+  return '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span>' + label + '</span><span class="' + (cls || '') + '" style="font-weight:700;">' + n + '</span></div>';
+}
+
+async function loadDaySummary_() {
+  const wrap = document.getElementById('s07-summary');
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  document.getElementById('s07-reconcile').innerHTML = '';
+  setSyncBadge_('s07-sync', 'loading');
+  const r = await api('day.summary', { direction: state.s07Direction });
+  if (!r.ok) { wrap.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; setSyncBadge_('s07-sync', 'error'); return; }
+  setSyncBadge_('s07-sync', 'fresh', Date.now());
+  renderDaySummary_(r.data);
+}
+
+function renderDaySummary_(d) {
+  const t = d.totals;
+  const doneCount = t.expected - t.unaccounted;
+  const pct = t.expected ? Math.round((doneCount / t.expected) * 100) : 100;
+  const canClose = state.permissions.indexOf('day.close') !== -1;
+
+  document.getElementById('s07-summary').innerHTML =
+    '<div class="card" style="text-align:center;margin:12px 16px;">' +
+    '<div style="font-size:40px;font-weight:700;">' + doneCount + ' / ' + t.expected + '</div>' +
+    '<div class="progress-bar" style="margin:10px 0;"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
+    '<div style="color:var(--text-muted);font-size:13px;">' + pct + '%</div>' +
+    '</div>' +
+    '<div class="card" style="margin:12px 16px;">' +
+    statRow_('ครบวงจร', t.completed, 'icon-ok') +
+    statRow_('ขาด', t.absent, '') +
+    statRow_('ไม่ใช้รถ', t.excused, '') +
+    statRow_('อยู่บนรถ', t.onboard, t.onboard > 0 ? 'icon-error' : '') +
+    statRow_('ยังไม่เช็ค', t.pending, t.pending > 0 ? 'icon-amber' : '') +
+    statRow_('ไม่ทราบ', t.unresolved, t.unresolved > 0 ? 'icon-error' : '') +
+    (t.busChanges ? statRow_('เปลี่ยนคัน', t.busChanges, '') : '') +
+    '</div>' +
+    (d.canClose
+      ? (canClose
+        ? '<button class="btn btn-primary btn-block" style="margin:12px 16px;width:calc(100% - 32px);" id="btn-day-close">' + ic('check-circle') + ' ปิดยอดประจำวัน</button>'
+        : '<div class="empty-state">ยอดครบแล้ว รอผู้ดูแลกดปิดยอด</div>')
+      : '<div class="card" style="margin:12px 16px;border-color:var(--color-error);">' +
+      '<div style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ยังปิดยอดไม่ได้ — เหลือ ' + t.unaccounted + ' คน</div>' +
+      '<button class="btn btn-secondary btn-block" style="margin-top:10px;" id="btn-day-view-missing">ดูว่าใครหาย →</button>' +
+      '</div>');
+
+  if (d.canClose && canClose) {
+    onClickGuarded_('btn-day-close', async () => {
+      const r = await api('day.close', { direction: state.s07Direction });
+      if (!r.ok) { toast(r.error.message); return; }
+      toast('ปิดยอดประจำวันแล้ว');
+      loadDaySummary_();
+    });
+  }
+  if (!d.canClose) {
+    document.getElementById('btn-day-view-missing').addEventListener('click', () => loadReconcile_());
+  }
+}
+
+async function loadReconcile_() {
+  const wrap = document.getElementById('s07-reconcile');
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  const date = new Date().toISOString().slice(0, 10);
+  const r = await api('day.unaccounted', { date: date, direction: state.s07Direction });
+  if (!r.ok) { wrap.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
+  renderReconcile_(r.data.items, date);
+}
+
+function renderReconcile_(items, date) {
+  const wrap = document.getElementById('s07-reconcile');
+  if (!items.length) { wrap.innerHTML = '<div class="empty-state">ไม่มีใครค้างแล้ว</div>'; return; }
+  const canResolve = state.permissions.indexOf('day.resolve') !== -1;
+
+  wrap.innerHTML = '<div style="padding:0 16px;font-weight:700;margin:10px 0;">เหลือ ' + items.length + ' คนที่ยังไม่ลงตัว</div>' +
+    items.map(it => (
+      '<div class="card" style="margin:10px 16px;' + (it.severity === 'CRITICAL' ? 'border-color:var(--color-error);' : '') + '">' +
+      '<div style="font-weight:700;">' + (it.severity === 'CRITICAL' ? ic('alert-octagon', 'icon-error') : ic('alert-triangle', 'icon-amber')) + ' ' + it.name + ' · ' + it.class + '</div>' +
+      '<div class="progress">' + it.hint + '</div>' +
+      (it.planned_bus && it.planned_bus.teacher ? '<div class="progress">ครูประจำรถ: ' + it.planned_bus.teacher + (it.planned_bus.teacher_phone ? ' · <a href="tel:' + it.planned_bus.teacher_phone + '">' + it.planned_bus.teacher_phone + '</a>' : '') + '</div>' : '') +
+      (it.guardian && it.guardian.name ? '<div class="progress">ผู้ปกครอง: ' + it.guardian.name + (it.guardian.phone ? ' · <a href="tel:' + it.guardian.phone + '">' + it.guardian.phone + '</a>' : '') + '</div>' : '') +
+      (canResolve
+        ? '<div class="chip-group" style="margin-top:8px;">' +
+        it.suggestedReasons.filter(rc => REASON_STATUS_MAP_[rc]).map(rc =>
+          '<div class="chip" data-resolve="' + it.student_id + '" data-reason="' + rc + '" data-status="' + REASON_STATUS_MAP_[rc] + '">' + (REASON_LABELS_[rc] || rc) + '</div>'
+        ).join('') +
+        '</div>'
+        : '') +
+      '</div>'
+    )).join('');
+
+  wrap.querySelectorAll('[data-resolve]').forEach(chip => chip.addEventListener('click', guardClick_(async (e) => {
+    const studentId = e.currentTarget.dataset.resolve;
+    const reasonCode = e.currentTarget.dataset.reason;
+    const status = e.currentTarget.dataset.status;
+    const r = await api('day.resolve', { date: date, direction: state.s07Direction, items: [{ studentId: studentId, status: status, reasonCode: reasonCode }] });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('บันทึกแล้ว');
+    loadReconcile_();
+    loadDaySummary_();
+  })));
+}
+
+// ---------------------------------------------------------------------------
+// S-12 จัดการผู้ใช้และสิทธิ์
+// ---------------------------------------------------------------------------
+
+document.getElementById('btn-refresh-users').addEventListener('click', () => loadUsersList_());
+document.getElementById('s12-search').addEventListener('input', debounce_(() => loadUsersList_(), 300));
+document.getElementById('s12-tabs').querySelectorAll('.chip').forEach(chip => chip.addEventListener('click', () => {
+  document.querySelectorAll('#s12-tabs .chip').forEach(c => c.classList.remove('selected'));
+  chip.classList.add('selected');
+  loadUsersList_();
+}));
+
+function debounce_(fn, ms) {
+  let t = null;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+async function loadUsersList_() {
+  const list = document.getElementById('s12-list');
+  list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  setSyncBadge_('s12-sync', 'loading');
+  const status = document.querySelector('#s12-tabs .chip.selected').dataset.status;
+  const q = document.getElementById('s12-search').value.trim();
+  const [usersR, rolesR] = await Promise.all([
+    api('user.list', { status: status || undefined, q: q || undefined }),
+    ensureRolesLoaded_()
+  ]);
+  if (!usersR.ok) { list.innerHTML = '<div class="empty-state">' + usersR.error.message + '</div>'; setSyncBadge_('s12-sync', 'error'); return; }
+  setSyncBadge_('s12-sync', 'fresh', Date.now());
+  renderUsersList_(usersR.data);
+}
+
+async function ensureRolesLoaded_() {
+  if (state.rolesList) return state.rolesList;
+  const r = await api('role.list', {});
+  state.rolesList = r.ok ? r.data : [];
+  return state.rolesList;
+}
+
+function renderUsersList_(users) {
+  const list = document.getElementById('s12-list');
+  if (!users.length) { list.innerHTML = '<div class="empty-state">ไม่พบผู้ใช้</div>'; return; }
+  const myLevel = state.profile.level || 0;
+  // เลือกได้เฉพาะ role ที่ level ต่ำกว่าตัวเองเคร่งครัด ยกเว้น SUPER_ADMIN (level 100) ตั้งอีกคนเป็น
+  // SUPER_ADMIN ได้ —ตรงกับกฎ P1 ฝั่ง server ใน admin.js (server เช็คซ้ำอีกชั้นเสมอ)
+  const grantable = (state.rolesList || []).filter(r => r.level < myLevel || (myLevel === 100 && r.role_code === 'SUPER_ADMIN'));
+
+  list.innerHTML = users.map(u => (
+    '<div class="roster-row" data-user="' + u.user_id + '" style="flex-direction:column;align-items:stretch;gap:6px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+    '<div><div class="name">' + u.display_name + '</div><div class="meta">เข้าใช้ล่าสุด ' + (u.last_login_at ? new Date(u.last_login_at).toLocaleString('th-TH') : 'ยังไม่เคย') + '</div></div>' +
+    '<span class="status-badge" style="background:' + (u.status === 'ACTIVE' ? 'var(--color-board)' : u.status === 'SUSPENDED' ? 'var(--color-error)' : 'var(--color-absent)') + '">' + u.status + '</span>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;">' +
+    '<select class="s12-role-select" data-user="' + u.user_id + '" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">' +
+    grantable.map(r => '<option value="' + r.role_code + '"' + (r.role_code === u.role_code ? ' selected' : '') + '>' + r.role_name_th + '</option>').join('') +
+    (grantable.some(r => r.role_code === u.role_code) ? '' : '<option value="' + u.role_code + '" selected disabled>' + u.role_name + ' (ปัจจุบัน)</option>') +
+    '</select>' +
+    '<button class="btn btn-secondary" style="min-height:36px;padding:6px 10px;font-size:13px;" data-toggle-status="' + u.user_id + '" data-current-status="' + u.status + '">' + (u.status === 'SUSPENDED' ? 'เปิดใช้งาน' : 'ระงับ') + '</button>' +
+    '</div>' +
+    '</div>'
+  )).join('');
+
+  list.querySelectorAll('.s12-role-select').forEach(sel => {
+    sel.dataset.prevValue = sel.value;
+    sel.addEventListener('change', guardClick_(async (e) => {
+      // เก็บ reference ของ <select> ไว้เองตั้งแต่ต้น — e.currentTarget จะเป็น null หลัง await
+      // เพราะ browser เคลียร์ค่านี้ทิ้งทันทีที่ event dispatch จบรอบ (ก่อนโค้ดหลัง await จะรันต่อ)
+      const target = e.currentTarget;
+      const userId = target.dataset.user;
+      const roleCode = target.value;
+      const user = users.find(u => u.user_id === userId);
+      let confirmName;
+      if (roleCode === 'SUPER_ADMIN') {
+        confirmName = prompt('ยืนยันการตั้งเป็นผู้ดูแลระบบสูงสุด — พิมพ์ชื่อ "' + user.display_name + '" ให้ตรงกัน');
+        if (confirmName !== user.display_name) { toast('ชื่อไม่ตรงกัน ยกเลิกการเปลี่ยนสิทธิ์'); target.value = target.dataset.prevValue; return; }
+      }
+      const r = await api('user.setRole', { userId: userId, roleCode: roleCode, confirmName: confirmName });
+      if (!r.ok) { toast(r.error.message); target.value = target.dataset.prevValue; return; }
+      target.dataset.prevValue = roleCode;
+      toast('เปลี่ยนสิทธิ์ ' + user.display_name + ' เป็น ' + r.data.user.role_name + ' แล้ว');
+    }));
+  });
+
+  list.querySelectorAll('[data-toggle-status]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const userId = e.currentTarget.dataset.toggleStatus;
+    const currentlySuspended = e.currentTarget.dataset.currentStatus === 'SUSPENDED';
+    if (!currentlySuspended && !confirm('ระงับผู้ใช้คนนี้?')) return;
+    const r = await api(currentlySuspended ? 'user.activate' : 'user.suspend', { userId: userId });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast(currentlySuspended ? 'เปิดใช้งานแล้ว' : 'ระงับแล้ว');
+    loadUsersList_();
+  })));
+}
+
+// ---------------------------------------------------------------------------
+// S-17 กล่องรออนุมัติ
+// ---------------------------------------------------------------------------
+
+document.getElementById('btn-refresh-approvals').addEventListener('click', () => loadApprovalsList_());
+
+async function loadApprovalsList_() {
+  const list = document.getElementById('s17-list');
+  list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  setSyncBadge_('s17-sync', 'loading');
+  const [regsR] = await Promise.all([api('reg.list', { status: 'PENDING' }), ensureRolesLoaded_()]);
+  if (!regsR.ok) { list.innerHTML = '<div class="empty-state">' + regsR.error.message + '</div>'; setSyncBadge_('s17-sync', 'error'); return; }
+  setSyncBadge_('s17-sync', 'fresh', Date.now());
+  renderApprovalsList_(regsR.data);
+}
+
+function renderApprovalsList_(regs) {
+  const list = document.getElementById('s17-list');
+  if (!regs.length) { list.innerHTML = '<div class="empty-state">ไม่มีคำขอรออนุมัติ</div>'; return; }
+  const myLevel = state.profile.level || 0;
+  const grantable = (state.rolesList || []).filter(r => r.level < myLevel);
+
+  list.innerHTML = regs.map(r => {
+    const isTeacher = r.reg_type === 'TEACHER';
+    return '<div class="card" style="margin:10px 16px;" data-reg="' + r.reg_id + '">' +
+      '<div class="card-title">' + (isTeacher ? ic('briefcase') : ic('graduation-cap')) + ' ' + r.full_name + (r.nickname ? ' (' + r.nickname + ')' : '') + '</div>' +
+      '<div class="meta">' + (isTeacher ? (r.phone || '') : (r.class_level || '') + ' ' + (r.room || '')) + '</div>' +
+      '<div class="meta">ยื่นเมื่อ ' + new Date(r.submitted_at).toLocaleString('th-TH') + '</div>' +
+      (isTeacher
+        ? '<div class="field" style="margin:8px 0 0;"><label>สิทธิ์ที่จะให้</label><select class="s17-role-select">' +
+        grantable.map(rr => '<option value="' + rr.role_code + '">' + rr.role_name_th + '</option>').join('') + '</select></div>'
+        : '<div class="chip-group" style="margin:8px 0 0;">' +
+        '<div class="chip selected" data-ride="am">เช้า</div><div class="chip selected" data-ride="pm">เย็น</div>' +
+        '</div>' +
+        '<div class="chip-group s17-days" style="margin-top:6px;">' +
+        ['MO', 'TU', 'WE', 'TH', 'FR'].map(d => '<div class="chip selected" data-day="' + d + '">' + ({ MO: 'จ', TU: 'อ', WE: 'พ', TH: 'พฤ', FR: 'ศ' }[d]) + '</div>').join('') +
+        '</div>') +
+      '<div class="dialog-actions" style="margin-top:10px;">' +
+      '<button class="btn btn-secondary" data-reject="' + r.reg_id + '">ไม่อนุมัติ</button>' +
+      '<button class="btn btn-primary" data-approve="' + r.reg_id + '" data-type="' + r.reg_type + '">อนุมัติ</button>' +
+      '</div></div>';
+  }).join('');
+
+  list.querySelectorAll('.card').forEach(card => {
+    card.querySelectorAll('.chip[data-ride], .chip[data-day]').forEach(chip => chip.addEventListener('click', () => chip.classList.toggle('selected')));
+  });
+
+  list.querySelectorAll('[data-approve]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const regId = e.currentTarget.dataset.approve;
+    const type = e.currentTarget.dataset.type;
+    const card = e.currentTarget.closest('.card');
+    let r;
+    if (type === 'TEACHER') {
+      const roleCode = card.querySelector('.s17-role-select').value;
+      if (!roleCode) { toast('กรุณาเลือกสิทธิ์'); return; }
+      r = await api('reg.approveTeacher', { regId: regId, roleCode: roleCode });
+    } else {
+      const rideAm = card.querySelector('.chip[data-ride="am"]').classList.contains('selected');
+      const ridePm = card.querySelector('.chip[data-ride="pm"]').classList.contains('selected');
+      const serviceDays = Array.from(card.querySelectorAll('.s17-days .chip.selected')).map(c => c.dataset.day);
+      if (!rideAm && !ridePm) { toast('ต้องระบุว่าใช้รถเช้าหรือเย็นอย่างน้อยหนึ่งช่วง'); return; }
+      if (!serviceDays.length) { toast('กรุณาระบุวันที่ใช้บริการ'); return; }
+      r = await api('reg.approveStudent', { regId: regId, studentPatch: { rideAm: rideAm, ridePm: ridePm, serviceDays: serviceDays } });
+    }
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('อนุมัติแล้ว');
+    loadApprovalsList_();
+  })));
+
+  list.querySelectorAll('[data-reject]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const reason = prompt('เหตุผลที่ไม่อนุมัติ');
+    if (!reason) return;
+    const r = await api('reg.reject', { regId: e.currentTarget.dataset.reject, reason: reason });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('ไม่อนุมัติแล้ว');
+    loadApprovalsList_();
+  })));
+}
+
+// ---------------------------------------------------------------------------
+// S-13 ศูนย์แจ้งเตือน
+// ---------------------------------------------------------------------------
+
+document.getElementById('btn-refresh-alerts').addEventListener('click', () => loadAlertsList_());
+document.getElementById('s13-tabs').querySelectorAll('.chip').forEach(chip => chip.addEventListener('click', () => {
+  document.querySelectorAll('#s13-tabs .chip').forEach(c => c.classList.remove('selected'));
+  chip.classList.add('selected');
+  loadAlertsList_();
+}));
+
+const ALERT_LEVEL_ICON_ = { CRITICAL: ic('alert-octagon', 'icon-error'), WARN: ic('alert-triangle', 'icon-amber'), INFO: ic('bell', 'icon-muted') };
+
+async function loadAlertsList_() {
+  const list = document.getElementById('s13-list');
+  list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  setSyncBadge_('s13-sync', 'loading');
+  const status = document.querySelector('#s13-tabs .chip.selected').dataset.status;
+  const r = await api('alert.list', { status: status || undefined });
+  if (!r.ok) { list.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; setSyncBadge_('s13-sync', 'error'); return; }
+  setSyncBadge_('s13-sync', 'fresh', Date.now());
+  renderAlertsList_(r.data);
+}
+
+function renderAlertsList_(alerts) {
+  const list = document.getElementById('s13-list');
+  if (!alerts.length) { list.innerHTML = '<div class="empty-state">ไม่มีการแจ้งเตือน</div>'; return; }
+  const canAck = state.permissions.indexOf('alert.ack') !== -1;
+
+  list.innerHTML = alerts.map(a => (
+    '<div class="card" style="margin:10px 16px;">' +
+    '<div style="font-weight:700;">' + (ALERT_LEVEL_ICON_[a.level] || '') + ' ' + a.title + '</div>' +
+    '<div class="progress">' + a.message + '</div>' +
+    '<div class="meta">' + new Date(a.created_at).toLocaleString('th-TH') + '</div>' +
+    (a.status === 'OPEN' && canAck
+      ? '<button class="btn btn-secondary" style="margin-top:8px;" data-ack="' + a.alert_id + '">รับทราบ</button>'
+      : a.status !== 'OPEN' ? '<div class="meta" style="margin-top:4px;">' + (a.status === 'ACKED' ? 'รับทราบแล้ว' : 'จบแล้ว') + '</div>' : '') +
+    '</div>'
+  )).join('');
+
+  list.querySelectorAll('[data-ack]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const r = await api('alert.ack', { alertIds: [e.currentTarget.dataset.ack] });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('รับทราบแล้ว');
+    loadAlertsList_();
+  })));
+}
 
 document.getElementById('btn-new-round').addEventListener('click', () => openCreateRoundDialog_());
 document.getElementById('dlg-create-round-cancel').addEventListener('click', () => {
@@ -1550,4 +1914,67 @@ onClickGuarded_('btn-submit-noride', async () => {
   toast('แจ้งไม่ใช้รถแล้ว');
   showScreen('S-21');
   loadStudentHome_({ silent: true });
+});
+
+// ---------------------------------------------------------------------------
+// Dialog: มอบหมายผู้เช็ค (S-15) — ใช้ user.list เลือกคน จึงต้องมีสิทธิ์ user.view ด้วย
+// (round.assign เปิดให้ SUPERVISOR ใช้ได้ แต่ SUPERVISOR ไม่มี user.view — ในกรณีนั้นแจ้งตรง ๆ
+// แทนที่จะยิง user.list แล้วเจอ E_FORBIDDEN เงียบ ๆ)
+// ---------------------------------------------------------------------------
+
+document.getElementById('dlg-assign-cancel').addEventListener('click', () => {
+  document.getElementById('dlg-assign-round').classList.remove('show');
+});
+
+async function openAssignDialog_(roundId) {
+  document.getElementById('assign-round-id').value = roundId;
+  renderAssignCurrent_(roundId);
+  document.getElementById('dlg-assign-round').classList.add('show');
+
+  const sel = document.getElementById('assign-user-select');
+  const addBtn = document.getElementById('dlg-assign-add');
+  if (state.permissions.indexOf('user.view') === -1) {
+    sel.innerHTML = '<option value="">(ต้องมีสิทธิ์ดูรายชื่อผู้ใช้จึงจะเลือกได้ — ติดต่อผู้ดูแลระบบ)</option>';
+    sel.disabled = true; addBtn.disabled = true;
+    return;
+  }
+  sel.disabled = false; addBtn.disabled = false;
+  sel.innerHTML = '<option value="">กำลังโหลด...</option>';
+  const r = await api('user.list', { status: 'ACTIVE' });
+  if (!r.ok) { sel.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>'; return; }
+  sel.innerHTML = r.data.map(u => '<option value="' + u.user_id + '">' + u.display_name + ' (' + u.role_name + ')</option>').join('');
+}
+
+const ROLE_IN_ROUND_LABEL_ = { LEAD: 'หัวหน้ารอบ', ASSIST: 'ผู้ช่วย' };
+
+function renderAssignCurrent_(roundId) {
+  const round = state.roundsById[roundId];
+  const wrap = document.getElementById('dlg-assign-current');
+  if (!round || !round.checkers.length) { wrap.innerHTML = '<div class="empty-state">ยังไม่มีผู้เช็ค</div>'; return; }
+  wrap.innerHTML = round.checkers.map(c => (
+    '<div class="roster-row"><div><div class="name">' + c.name + '</div><div class="meta">' + (ROLE_IN_ROUND_LABEL_[c.role] || c.role) + '</div></div>' +
+    '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-unassign="' + c.user_id + '">ถอด</button></div>'
+  )).join('');
+  wrap.querySelectorAll('[data-unassign]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    if (!confirm('ถอดผู้เช็คคนนี้ออกจากรอบ?')) return;
+    const r = await api('round.unassign', { roundId: roundId, userId: e.currentTarget.dataset.unassign });
+    if (!r.ok) { toast(r.error.message); return; }
+    state.roundsById[roundId].checkers = r.data.checkers;
+    toast('ถอดผู้เช็คแล้ว');
+    renderAssignCurrent_(roundId);
+    loadRounds_({ silent: true });
+  })));
+}
+
+onClickGuarded_('dlg-assign-add', async () => {
+  const roundId = document.getElementById('assign-round-id').value;
+  const userId = document.getElementById('assign-user-select').value;
+  const roleInRound = document.getElementById('assign-role-select').value;
+  if (!userId) { toast('กรุณาเลือกผู้เช็ค'); return; }
+  const r = await api('round.assign', { roundId: roundId, assignees: [{ userId: userId, roleInRound: roleInRound }] });
+  if (!r.ok) { toast(r.error.message); return; }
+  state.roundsById[roundId].checkers = r.data.checkers;
+  toast('มอบหมายแล้ว');
+  renderAssignCurrent_(roundId);
+  loadRounds_({ silent: true });
 });
