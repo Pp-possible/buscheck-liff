@@ -80,6 +80,26 @@ function toast(msg, ms) {
 
 function vibrate(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); }
 
+// กันกดปุ่มซ้ำระหว่างรอ API ตอบ (double-submit) — ปิดปุ่มไว้ระหว่างทำงาน คืนสภาพให้เสมอไม่ว่าสำเร็จ
+// หรือพัง ปุ่มที่ปิดอยู่แล้วจะเห็นเป็นสีจาง ๆ ตาม .btn[disabled] ใน styles.css โดยอัตโนมัติ
+function guardClick_(fn) {
+  return async function (e) {
+    const btn = e && e.currentTarget;
+    if (btn) {
+      if (btn.dataset.busy === '1') return;
+      btn.dataset.busy = '1';
+      btn.disabled = true;
+    }
+    try { await fn(e); } finally {
+      if (btn) { btn.disabled = false; delete btn.dataset.busy; }
+    }
+  };
+}
+
+function onClickGuarded_(id, fn) {
+  document.getElementById(id).addEventListener('click', guardClick_(fn));
+}
+
 function beep(freq, duration) {
   try {
     const ctx = beep._ctx || (beep._ctx = new (window.AudioContext || window.webkitAudioContext)());
@@ -461,7 +481,7 @@ async function populateBusStopSelects_() {
   stopSel.innerHTML = '<option value="">— เลือกจุดจอด —</option>';
 }
 
-document.getElementById('btn-submit-teacher').addEventListener('click', async () => {
+onClickGuarded_('btn-submit-teacher', async () => {
   const fullName = document.getElementById('t-fullName').value.trim();
   const phone = document.getElementById('t-phone').value.trim();
   if (!fullName || !phone) { toast('กรุณากรอกชื่อและเบอร์โทรให้ครบ'); return; }
@@ -479,7 +499,7 @@ document.getElementById('btn-submit-teacher').addEventListener('click', async ()
   showScreen('S-00d');
 });
 
-document.getElementById('btn-submit-student').addEventListener('click', async () => {
+onClickGuarded_('btn-submit-student', async () => {
   const payload = {
     ticket: state.ticket,
     fullName: document.getElementById('s-fullName').value.trim(),
@@ -620,14 +640,14 @@ function renderRoundsList_(rounds) {
   list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
   list.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.edit], false)));
   list.querySelectorAll('[data-duplicate]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.duplicate], true)));
-  list.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', async (e) => {
+  list.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
     if (!confirm('ยืนยันลบรอบเช็คนี้?')) return;
     const roundId = e.currentTarget.dataset.delete;
     const r = await api('round.delete', { roundId });
     if (!r.ok) { toast(r.error.message); return; }
     toast('ลบรอบสำเร็จ');
     loadRounds_({ silent: true });
-  }));
+  })));
 
   // Swipe logic
   let startX = 0, currentX = 0;
@@ -723,7 +743,7 @@ async function openCreateRoundDialog_(existingRound, duplicate) {
   if (existingRound && buses.some(b => b.bus_id === existingRound.scope_id)) busSel.value = existingRound.scope_id;
 }
 
-document.getElementById('dlg-create-round-submit').addEventListener('click', async () => {
+onClickGuarded_('dlg-create-round-submit', async () => {
   const roundName = document.getElementById('cr-name').value.trim();
   const busId = document.getElementById('cr-bus').value;
   const scheduledAt = document.getElementById('cr-scheduled-at').value;
@@ -890,7 +910,7 @@ document.getElementById('dlg-transfer-cancel').addEventListener('click', () => {
   document.getElementById('dlg-confirm-transfer').classList.remove('show');
   pendingTransfer = null;
 });
-document.getElementById('dlg-transfer-confirm').addEventListener('click', async () => {
+onClickGuarded_('dlg-transfer-confirm', async () => {
   document.getElementById('dlg-confirm-transfer').classList.remove('show');
   if (!pendingTransfer) return;
   await submitScanEvent_(pendingTransfer.originalEvent.raw, pendingTransfer.originalEvent.method, { confirmTransfer: true });
@@ -912,7 +932,7 @@ document.getElementById('dlg-duplicate-ack').addEventListener('click', () => {
   document.getElementById('dlg-duplicate').classList.remove('show');
   pendingDuplicate = null;
 });
-document.getElementById('dlg-duplicate-override').addEventListener('click', async () => {
+onClickGuarded_('dlg-duplicate-override', async () => {
   document.getElementById('dlg-duplicate').classList.remove('show');
   if (!pendingDuplicate) return;
   const reason = prompt('ระบุเหตุผลที่เช็คทับ (เช่น เช็คผิดคน / ผลเดิมผิด)') || 'อื่น ๆ';
@@ -1057,7 +1077,7 @@ async function loadCloseScreen_() {
 
 document.getElementById('btn-refresh-close').addEventListener('click', loadCloseScreen_);
 
-document.getElementById('btn-close-round').addEventListener('click', async () => {
+onClickGuarded_('btn-close-round', async () => {
   const r = await api('round.close', { roundId: state.currentRoundId });
   if (!r.ok) {
     if (r.error.code === 'E_ROUND_INCOMPLETE' && r.error.details) {
@@ -1085,7 +1105,7 @@ function showManageBlockersUI_(blockers) {
       '<div class="chip" data-manage="UNRESOLVED" data-student="' + b.student_id + '">ยังไม่ทราบ</div></div>'
     )).join('');
   wrap.appendChild(div);
-  div.querySelectorAll('[data-manage]').forEach(chip => chip.addEventListener('click', async () => {
+  div.querySelectorAll('[data-manage]').forEach(chip => chip.addEventListener('click', guardClick_(async () => {
     const status = chip.dataset.manage;
     const reasonCode = status === 'ABSENT' ? 'NO_SHOW' : status === 'EXCUSED' ? 'PARENT_PICKUP' : 'STILL_SEARCHING';
     const r = await api('student.setStatus', {
@@ -1094,10 +1114,10 @@ function showManageBlockersUI_(blockers) {
     });
     if (r.ok) { chip.closest('.roster-row').nextSibling ? null : null; chip.parentElement.previousElementSibling.remove(); chip.parentElement.remove(); toast('บันทึกแล้ว'); }
     else toast(r.error.message);
-  }));
+  })));
 }
 
-document.getElementById('btn-close-trip').addEventListener('click', async () => {
+onClickGuarded_('btn-close-trip', async () => {
   const rr = await api('round.get', { roundId: state.currentRoundId });
   if (!rr.ok) return;
   const r = await api('trip.close', { tripId: rr.data.trip_id });
@@ -1143,7 +1163,7 @@ function tickVouchQr_() {
 }
 
 document.getElementById('btn-vouch-new').addEventListener('click', refreshVouchTokens_);
-document.getElementById('btn-vouch-revoke-all').addEventListener('click', async () => {
+onClickGuarded_('btn-vouch-revoke-all', async () => {
   if (!confirm('ยกเลิก QR ทั้งชุดที่ออกไปแล้ว?')) return;
   const r = await api('vouch.revokeAllTokens', {});
   if (r.ok) { toast('ยกเลิกแล้ว'); refreshVouchTokens_(); } else toast(r.error.message);
@@ -1160,11 +1180,11 @@ async function renderVouchesList_() {
     '</div>'
   )).join('') || '<div class="empty-state">ยังไม่มีรายการ</div>';
 
-  list.querySelectorAll('[data-revoke]').forEach(btn => btn.addEventListener('click', async () => {
+  list.querySelectorAll('[data-revoke]').forEach(btn => btn.addEventListener('click', guardClick_(async () => {
     if (!confirm('ยืนยันระงับบัญชีนี้?')) return;
     const rr = await api('vouch.revoke', { regId: btn.dataset.revoke, reason: 'ไม่ใช่ฉัน' });
     if (rr.ok) { toast('ระงับบัญชีแล้ว'); renderVouchesList_(); } else toast(rr.error.message);
-  }));
+  })));
 }
 
 // ---------------------------------------------------------------------------
@@ -1198,7 +1218,7 @@ function renderBusList_(buses) {
     if (bus) openBusDialog_(bus);
   }));
 
-  list.querySelectorAll('[data-bus-toggle]').forEach(btn => btn.addEventListener('click', async () => {
+  list.querySelectorAll('[data-bus-toggle]').forEach(btn => btn.addEventListener('click', guardClick_(async () => {
     const busId = btn.dataset.busToggle;
     const currently = btn.dataset.busActive === 'true';
     const bus = buses.find(b => b.bus_id === busId);
@@ -1207,7 +1227,7 @@ function renderBusList_(buses) {
     const r = await api('bus.setActive', { busId, active: !currently });
     if (r.ok) { toast(currently ? 'ปิดใช้งานแล้ว' : 'เปิดใช้งานแล้ว'); loadBuses_({ silent: true }); }
     else toast(r.error.message);
-  }));
+  })));
 }
 
 async function loadBuses_(opts) {
@@ -1250,7 +1270,7 @@ document.getElementById('btn-add-bus').addEventListener('click', () => openBusDi
 document.getElementById('btn-refresh-buses').addEventListener('click', () => loadBuses_());
 document.getElementById('dlg-bus-cancel').addEventListener('click', () => document.getElementById('dlg-bus-edit').classList.remove('show'));
 
-document.getElementById('dlg-bus-save').addEventListener('click', async () => {
+onClickGuarded_('dlg-bus-save', async () => {
   const busCode = document.getElementById('be-code').value.trim();
   if (!busCode) { toast('กรุณาระบุหมายเลข/ชื่อรถ'); return; }
   const busId = document.getElementById('be-bus-id').value;
@@ -1356,7 +1376,7 @@ async function loadStudentHistory_() {
   }).join('');
 }
 
-document.getElementById('btn-submit-noride').addEventListener('click', async () => {
+onClickGuarded_('btn-submit-noride', async () => {
   const dateFrom = document.getElementById('s23-date-from').value;
   const dateTo = document.getElementById('s23-date-to').value;
   if (!dateFrom || !dateTo) { toast('กรุณาระบุช่วงวันที่'); return; }

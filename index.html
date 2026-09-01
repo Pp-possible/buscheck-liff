@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BusCheck — เช็คยอดนักเรียนบนรถ</title>
 <link rel="stylesheet" href="styles.css">
 <script>
@@ -72,7 +72,7 @@
   <!-- ============ S-00b สแกน QR ผู้รับรอง ============ -->
   <section class="screen" data-screen="S-00b">
     <div class="topbar">
-      <button class="back" data-back="S-00a">←</button>
+      <button class="back" data-back="S-00a" aria-label="ย้อนกลับ">←</button>
       <div class="title" id="s00b-title">สแกน QR ผู้รับรอง</div>
     </div>
     <div class="card">
@@ -85,7 +85,7 @@
   <!-- ============ S-00c ฟอร์มลงทะเบียน ============ -->
   <section class="screen" data-screen="S-00c">
     <div class="topbar">
-      <button class="back" data-back="S-00b">←</button>
+      <button class="back" data-back="S-00b" aria-label="ย้อนกลับ">←</button>
       <div class="title">กรอกข้อมูล</div>
     </div>
     <div class="card" id="s00c-sponsor-card">
@@ -147,8 +147,8 @@
   <section class="screen" data-screen="S-01">
     <div class="topbar">
       <div class="title">BusCheck</div>
-      <button class="back" id="btn-refresh-home" title="รีเฟรช">⟳</button>
-      <button class="back" id="btn-logout" title="ออกจากระบบ">⎋</button>
+      <button class="back" id="btn-refresh-home" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
+      <button class="back" id="btn-logout" title="ออกจากระบบ" aria-label="ออกจากระบบ">⎋</button>
     </div>
     <div class="sync-indicator" id="s01-sync"></div>
     <div class="card profile-card">
@@ -166,9 +166,9 @@
   <!-- ============ S-02 เลือกรอบเช็ค ============ -->
   <section class="screen" data-screen="S-02">
     <div class="topbar">
-      <button class="back" data-back="S-01">←</button>
+      <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
       <div class="title">รอบเช็ควันนี้</div>
-      <button class="back" id="btn-refresh-rounds" title="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-rounds" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
     </div>
     <div class="sync-indicator" id="s02-sync"></div>
     <div id="s02-list"></div>
@@ -206,9 +206,9 @@
   <!-- ============ S-04 รายชื่อ ============ -->
   <section class="screen" data-screen="S-04">
     <div class="topbar">
-      <button class="back" data-back="S-03">←</button>
+      <button class="back" data-back="S-03" aria-label="ย้อนกลับ">←</button>
       <div class="title">รายชื่อนักเรียน</div>
-      <button class="back" id="btn-refresh-roster" title="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-roster" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
     </div>
     <div class="sync-indicator" id="s04-sync"></div>
     <div class="search-bar"><input id="s04-search" type="text" placeholder="ค้นหาชื่อ/ชื่อเล่น/รหัส"></div>
@@ -226,9 +226,9 @@
   <!-- ============ S-05 ปิดรอบ/ปิดเที่ยว ============ -->
   <section class="screen" data-screen="S-05">
     <div class="topbar">
-      <button class="back" data-back="S-03">←</button>
+      <button class="back" data-back="S-03" aria-label="ย้อนกลับ">←</button>
       <div class="title">ปิดรอบ / ปิดเที่ยวรถ</div>
-      <button class="back" id="btn-refresh-close" title="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-close" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
     </div>
     <div class="sync-indicator" id="s05-sync"></div>
     <div class="card" id="s05-round-card">
@@ -247,7 +247,7 @@
   <!-- ============ S-19 QR รับรองของฉัน ============ -->
   <section class="screen" data-screen="S-19">
     <div class="topbar">
-      <button class="back" data-back="S-01">←</button>
+      <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
       <div class="title">QR รับรองการลงทะเบียน</div>
     </div>
     <div class="qr-wrap">
@@ -272,9 +272,9 @@
   <!-- ============ S-20 จัดการรถ ============ -->
   <section class="screen" data-screen="S-20">
     <div class="topbar">
-      <button class="back" data-back="S-01">←</button>
+      <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
       <div class="title">จัดการรถ</div>
-      <button class="back" id="btn-refresh-buses" title="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-buses" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
     </div>
     <div class="sync-indicator" id="s20-sync"></div>
     <div style="padding:12px 16px;">
@@ -287,7 +287,7 @@
   <section class="screen" data-screen="S-21">
     <div class="topbar">
       <div class="title">BusCheck</div>
-      <button class="back" id="btn-refresh-student-home" title="รีเฟรช">⟳</button>
+      <button class="back" id="btn-refresh-student-home" title="รีเฟรช" aria-label="รีเฟรช">⟳</button>
     </div>
     <div class="sync-indicator" id="s21-sync"></div>
     <div class="card" style="display:flex;align-items:center;gap:12px;">
@@ -317,7 +317,7 @@
   <!-- ============ S-22 รถและจุดจอด (นักเรียน) ============ -->
   <section class="screen" data-screen="S-22">
     <div class="topbar">
-      <button class="back" data-back="S-21">←</button>
+      <button class="back" data-back="S-21" aria-label="ย้อนกลับ">←</button>
       <div class="title">รถและจุดจอด</div>
     </div>
     <div id="s22-content" style="padding:12px 16px;"></div>
@@ -326,7 +326,7 @@
   <!-- ============ S-23 แจ้งไม่ใช้รถ (นักเรียน) ============ -->
   <section class="screen" data-screen="S-23">
     <div class="topbar">
-      <button class="back" data-back="S-21">←</button>
+      <button class="back" data-back="S-21" aria-label="ย้อนกลับ">←</button>
       <div class="title">แจ้งไม่ใช้รถ</div>
     </div>
     <div style="padding:12px 16px;">
@@ -348,7 +348,7 @@
   <!-- ============ S-24 ประวัติการเดินทาง (นักเรียน) ============ -->
   <section class="screen" data-screen="S-24">
     <div class="topbar">
-      <button class="back" data-back="S-21">←</button>
+      <button class="back" data-back="S-21" aria-label="ย้อนกลับ">←</button>
       <div class="title">ประวัติการเดินทาง</div>
     </div>
     <div id="s24-list" style="padding:12px 16px;"></div>
@@ -460,7 +460,7 @@
   </div>
 </div>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" onerror="showDebug_('โหลด LIFF SDK ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="showDebug_('โหลด html5-qrcode ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
