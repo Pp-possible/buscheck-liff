@@ -262,7 +262,7 @@ async function boot() {
     if (!r.ok) {
       if (r.error.code === 'E_PENDING_APPROVAL') { toast(r.error.message); return; }
       if (!cachedHome) toast(r.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
-      else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
+      else { toast('เชื่อมต่อไม่ได้: [' + r.error.code + '] ' + r.error.message, 8000); setSyncBadge_('s01-sync', 'error'); }
       return;
     }
 
