@@ -205,6 +205,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .tile[data-tile="users"] .icon-wrap { --tile-accent: #3498DB; --tile-accent-bg: rgba(52,152,219,0.15); }
 .tile[data-tile="approvals"] .icon-wrap { --tile-accent: #8A6D00; --tile-accent-bg: rgba(241,196,15,0.2); }
 .tile[data-tile="notifications"] .icon-wrap { --tile-accent: #E74C3C; --tile-accent-bg: rgba(231,76,60,0.15); }
+.tile[data-tile="students"] .icon-wrap { --tile-accent: #16A085; --tile-accent-bg: rgba(22,160,133,0.15); }
 
 /* ---------- S-02 Round list / S-14 Session detail ---------- */
 /* S-02/S-06 ใช้ .round-item การ์ดเดียวกันนี้แสดง "รอบเช็ค" 1 กลุ่ม (ชื่อรอบ+ประเภท+วันเวลา) —
@@ -243,6 +244,11 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 .round-item.open .status-badge { background: var(--color-board-badge); }
 .round-item.closed .status-badge { background: var(--color-primary-badge); }
+/* ตัวแปรสีที่ไม่ต้องพึ่ง .round-item.open/.closed ครอบ — ใช้ตอนการ์ดเดียวมีหลายสถานะย่อยพร้อมกัน
+   (เช่น dashboard รายคันรถใน S-07 ที่โชว์สถานะเช้า+บ่ายในการ์ดเดียว) */
+.status-badge.badge-open { background: var(--color-board-badge); }
+.status-badge.badge-closed { background: var(--color-primary-badge); }
+.status-badge.badge-none { background: var(--color-absent-badge); }
 .round-item .progress { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
 .round-item .warn { color: var(--color-duplicate-text); font-size: 13px; margin-top: 4px; font-weight: 600; }
 
