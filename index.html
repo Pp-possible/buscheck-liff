@@ -326,7 +326,8 @@
 <!-- ============ Dialog: สร้างรอบเช็คใหม่ ============ -->
 <div class="overlay" id="dlg-create-round">
   <div class="dialog">
-    <h3>สร้างรอบเช็คใหม่</h3>
+    <h3 id="dlg-create-round-title">สร้างรอบเช็คใหม่</h3>
+    <input type="hidden" id="cr-round-id" value="">
     <div class="field" style="margin:0 0 10px;"><label>ชื่อรอบ *</label><input id="cr-name" type="text" placeholder="เช่น เช็คยอดพิเศษ"></div>
     <div class="field" style="margin:0 0 10px;">
       <label>ประเภท *</label>
@@ -339,8 +340,8 @@
     </div>
     <div class="field" style="margin:0 0 10px;"><label>รถ *</label><select id="cr-bus"></select></div>
     <div class="field" style="margin:0 0 10px;">
-      <label>ช่วงเดินทาง *</label>
-      <select id="cr-direction"><option value="AM">เช้า (AM)</option><option value="PM">เย็น (PM)</option></select>
+      <label>วันที่และเวลาตรวจยอด *</label>
+      <input id="cr-scheduled-at" type="datetime-local">
     </div>
     <div class="field" style="margin:0 0 10px;">
       <label><input type="checkbox" id="cr-require-all" checked> ต้องเช็คครบทุกคนถึงจะปิดรอบได้</label>
