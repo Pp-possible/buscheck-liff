@@ -256,10 +256,15 @@ function deepLinkRoute_() {
 }
 
 async function boot() {
-  // วาดหน้าแรกจากแคชทันที (ถ้าเคยเปิดสำเร็จมาก่อน) ก่อนรอ LIFF/เซิร์ฟเวอร์เลย
-  // ให้รู้สึกเหมือนเปิดแอพแล้วเล่นได้เลย ปุ่มต่าง ๆ จะยังกดไม่ได้จริงจนกว่า bootReady
+  // เช็คลิงก์เจาะจงหน้า (?p=...) จาก URL ทันทีตั้งแต่ต้น ก่อน liff.init() เลย (อ่าน location.search
+  // ได้โดยไม่ต้องรอ LIFF) เพื่อไม่ให้วาดหน้าแรกจาก cache ทับก่อน — ปุ่ม Rich Menu ที่ตั้งใจพาไปหน้า
+  // เจาะจงจะได้ไม่ต้องเห็นหน้า home วาบขึ้นมาก่อนเด้งไปหน้าที่ต้องการ
+  state.pendingRoute = deepLinkRoute_();
+
+  // วาดหน้าแรกจากแคชทันที (ถ้าเคยเปิดสำเร็จมาก่อน) ก่อนรอ LIFF/เซิร์ฟเวอร์เลย — ข้ามขั้นนี้ถ้ามี
+  // ลิงก์เจาะจงหน้าอยู่แล้ว เพราะปลายทางจริงไม่ใช่หน้าแรก ไม่ต้องวาดหน้าแรกให้เสียเวลา/วาบจอ
   const cachedHome = cacheGet_('home');
-  if (cachedHome && cachedHome.data) {
+  if (cachedHome && cachedHome.data && !state.pendingRoute) {
     renderHomeFromData_(cachedHome.data);
     setSyncBadge_('s01-sync', 'cache', cachedHome.cachedAt);
     showScreen('S-01');
@@ -271,6 +276,8 @@ async function boot() {
       await liff.init({ liffId: CFG.LIFF_ID });
       if (!liff.isLoggedIn()) { liff.login(); return; }
       idToken = liff.getIDToken();
+      // liff.state มีค่าได้ก็ต่อเมื่อ liff.init() เสร็จแล้วเท่านั้น (LIFF ย้าย query string เดิมไปไว้ที่นี่
+      // ตอน redirect ผ่านหน้า login) เช็คซ้ำอีกทีเผื่อรอบแรกจาก location.search เพียวๆ ยังไม่เจอ
       if (!state.pendingRoute) state.pendingRoute = deepLinkRoute_();
     } catch (e) {
       if (!cachedHome) toast('เปิดผ่าน LINE เท่านั้น กรุณาเปิดลิงก์นี้ในแอพ LINE');
@@ -304,15 +311,17 @@ async function boot() {
     if (state.persona === 'STUDENT') {
       showScreen('S-21');
       loadStudentHome_();
+    } else if (state.pendingRoute) {
+      // มีลิงก์เจาะจงหน้า — ไปหน้านั้นตรง ๆ เลย ไม่ต้องผ่านหน้าแรกให้เห็นวาบก่อน แต่ยังโหลดข้อมูล
+      // หน้าแรกเงียบ ๆ อยู่เบื้องหลังไว้ด้วย (renderHome_ ไม่เรียก showScreen) กันหน้าแรกว่างเปล่า
+      // ตอนกดย้อนกลับจากหน้าที่ลิงก์พาไป
+      const route = state.pendingRoute;
+      state.pendingRoute = null;
+      navigateTile_(route);
+      renderHome_({ silent: true });
     } else {
       showScreen('S-01');
       renderHome_({ silent: !!cachedHome });
-
-      if (state.pendingRoute) {
-        const route = state.pendingRoute;
-        state.pendingRoute = null;
-        navigateTile_(route);
-      }
     }
   } finally {
     window.__buscheckBootReady = true;
