@@ -8,7 +8,7 @@
      บนมือถือ cache ไฟล์ static พวกนี้แน่นมาก แก้โค้ดแล้ว deploy ขึ้นจริงแล้วแต่ผู้ใช้ยังเห็นของเก่าอยู่ได้
      ทุกครั้งที่แก้ styles.css/app.js/config.js แล้วต้องการให้มือถือดึงของใหม่ทันที ต้องขยับเลขวันที่นี้ขึ้น
      (เปลี่ยน query string ทำให้ browser มองเป็นคนละไฟล์ ข้าม cache เก่าไปเลย ไม่ต้องรอ revalidate) -->
-<link rel="stylesheet" href="styles.css?v=20260902">
+<link rel="stylesheet" href="styles.css?v=20260902b">
 <script>
   // ตัวจับ error ถาวร — โชว์ error ตรงจอเลยเมื่อมีปัญหาจริงเท่านั้น (ปกติจะไม่ขึ้นอะไร)
   // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้ เวลามีปัญหาจะได้เห็นสาเหตุจากภาพหน้าจอผู้ใช้ได้เลย
@@ -172,6 +172,10 @@
     <path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6z"/>
     <path d="M10 20a2 2 0 0 0 4 0"/>
   </symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24">
+    <rect x="5" y="11" width="14" height="10" rx="2"/>
+    <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+  </symbol>
 </svg>
 <div id="debug-panel" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font-size:12px;line-height:1.5;padding:10px;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;"></div>
 <div id="app">
@@ -180,6 +184,7 @@
 
   <!-- ============ S-00a เลือกประเภท ============ -->
   <section class="screen" data-screen="S-00a">
+    <div class="reg-steps"><span class="seg active"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></div>
     <div class="hero">
       <div style="font-size:40px;"><svg class="icon"><use href="#i-bus"/></svg></div>
       <h1>BusCheck</h1>
@@ -189,7 +194,7 @@
     <button class="choice-btn" id="btn-reg-teacher" style="display:none">
       <span class="icon-wrap"><svg class="icon"><use href="#i-briefcase"/></svg></span>
       <span class="label">ลงทะเบียนเป็นครู/เจ้าหน้าที่</span>
-      <span class="hint">ต้องสแกน QR ของผู้ดูแลระบบสูงสุด</span>
+      <span class="hint">ต้องสแกน QR ของผู้ดูแลระบบสูงสุด และรู้รหัสผ่านลงทะเบียนครู</span>
     </button>
     <button class="choice-btn" id="btn-reg-student" style="display:none">
       <span class="icon-wrap"><svg class="icon"><use href="#i-graduation-cap"/></svg></span>
@@ -204,9 +209,13 @@
       <button class="back" data-back="S-00a" aria-label="ย้อนกลับ">←</button>
       <h1 class="title" id="s00b-title">สแกน QR ผู้รับรอง</h1>
     </div>
+    <div class="reg-steps"><span class="seg done"></span><span class="seg active"></span><span class="seg"></span><span class="seg"></span></div>
     <div class="card">
       <p id="s00b-instruction" style="margin:0 0 12px;color:var(--text-muted)"></p>
-      <div id="qr-reader-vouch" style="border-radius:14px;overflow:hidden;background:#000;min-height:260px;"></div>
+      <div class="qr-scan-wrap">
+        <div id="qr-reader-vouch"></div>
+        <div class="qr-scan-frame" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      </div>
       <p style="font-size:13px;color:var(--text-muted);margin-top:12px;"><svg class="icon"><use href="#i-bulb"/></svg> QR เปลี่ยนใหม่ทุก 20 วินาที ถ้าสแกนไม่ทัน ให้ผู้รับรองกดสร้างใหม่</p>
     </div>
   </section>
@@ -217,18 +226,25 @@
       <button class="back" data-back="S-00b" aria-label="ย้อนกลับ">←</button>
       <h1 class="title">กรอกข้อมูล</h1>
     </div>
+    <div class="reg-steps"><span class="seg done"></span><span class="seg done"></span><span class="seg active"></span><span class="seg"></span></div>
     <div class="card" id="s00c-sponsor-card">
       <div class="card-title"><svg class="icon icon-ok"><use href="#i-check-circle"/></svg> ยืนยันผู้รับรองแล้ว</div>
       <div id="s00c-sponsor-name" style="font-weight:700"></div>
       <div id="s00c-sponsor-role" style="color:var(--text-muted);font-size:13px"></div>
-      <div id="s00c-countdown" style="margin-top:8px;font-weight:600;color:var(--color-primary)"></div>
+      <div class="reg-countdown" id="s00c-countdown"></div>
     </div>
+
+    <div class="reg-section-label">ข้อมูลของคุณ</div>
 
     <div id="s00c-form-teacher" style="display:none">
       <div class="field"><label>ชื่อ-นามสกุล *</label><input id="t-fullName" type="text"></div>
-      <div class="field"><label>รหัสบุคลากร</label><input id="t-employeeCode" type="text"></div>
+      <div class="field"><label>ชื่อเล่น</label><input id="t-nickname" type="text"></div>
       <div class="field"><label>เบอร์โทร *</label><input id="t-phone" type="tel"></div>
-      <div class="field"><label>รถที่รับผิดชอบ</label><div class="chip-group" id="t-buses"></div></div>
+      <div class="field">
+        <label><svg class="icon"><use href="#i-lock"/></svg> รหัสผ่านลงทะเบียนครู *</label>
+        <input id="t-password" type="password" autocomplete="off" placeholder="ขอรหัสผ่านนี้จากผู้ดูแลระบบ">
+        <div class="hint">กันไม่ให้คนอื่นลงทะเบียนเป็นครูมั่ว ๆ — ถ้าไม่ทราบให้ติดต่อผู้ดูแลระบบ</div>
+      </div>
       <div class="field"><button class="btn btn-primary btn-block" id="btn-submit-teacher">ยืนยันการลงทะเบียน</button></div>
     </div>
 
@@ -244,7 +260,9 @@
   <!-- ============ S-00d สำเร็จ (ใช้ร่วม S-19 แสดง QR) ============ -->
   <section class="screen" data-screen="S-00d">
     <div class="topbar"><h1 class="title">ลงทะเบียนสำเร็จ</h1></div>
+    <div class="reg-steps"><span class="seg done"></span><span class="seg done"></span><span class="seg done"></span><span class="seg active"></span></div>
     <div class="qr-wrap">
+      <div class="reg-success-icon"><svg class="icon"><use href="#i-check-circle"/></svg></div>
       <div id="s00d-message" style="text-align:center;margin-bottom:16px;font-weight:600"></div>
       <div id="s00d-qr-box" class="qr-box" style="display:none">
         <div id="s00d-qr-canvas"></div>
@@ -677,7 +695,7 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" onerror="showDebug_('โหลด LIFF SDK ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="showDebug_('โหลด html5-qrcode ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="showDebug_('โหลด qrcodejs ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
-<script src="config.js?v=20260902"></script>
-<script src="app.js?v=20260902"></script>
+<script src="config.js?v=20260902b"></script>
+<script src="app.js?v=20260902b"></script>
 </body>
 </html>

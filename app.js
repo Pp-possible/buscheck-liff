@@ -454,34 +454,28 @@ function showVouchForm_(data) {
   s00cTimer = setInterval(() => {
     const left = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
     const m = Math.floor(left / 60), s = left % 60;
-    document.getElementById('s00c-countdown').textContent = '⏱ กรอกให้เสร็จภายใน ' + m + ':' + String(s).padStart(2, '0') + ' นาที';
+    const badge = document.getElementById('s00c-countdown');
+    badge.innerHTML = ic('clock') + ' กรอกให้เสร็จภายใน ' + m + ':' + String(s).padStart(2, '0') + ' นาที';
+    badge.classList.toggle('warn', left <= 60 && left > 20);
+    badge.classList.toggle('urgent', left <= 20);
     if (left <= 0) { clearInterval(s00cTimer); toast('หมดเวลากรอกฟอร์ม กรุณาสแกน QR ผู้รับรองใหม่'); showScreen('S-00a'); }
   }, 1000);
 
   document.getElementById('s00c-form-teacher').style.display = state.regType === 'TEACHER' ? 'block' : 'none';
   document.getElementById('s00c-form-student').style.display = state.regType === 'STUDENT' ? 'block' : 'none';
 
-  if (state.regType === 'TEACHER') renderBusChips_();
   showScreen('S-00c');
-}
-
-async function renderBusChips_() {
-  const r = await api('me.buses', {});
-  const buses = (r.ok ? r.data : []);
-  const wrap = document.getElementById('t-buses');
-  wrap.innerHTML = buses.map(b => '<div class="chip" data-bus="' + b.bus_id + '">' + b.bus_code + '</div>').join('') || '<span style="color:var(--text-muted);font-size:13px">(ยังไม่มีรถในระบบ — ให้ผู้ดูแลกำหนดภายหลัง)</span>';
-  wrap.querySelectorAll('.chip').forEach(c => c.onclick = () => c.classList.toggle('selected'));
 }
 
 onClickGuarded_('btn-submit-teacher', async () => {
   const fullName = document.getElementById('t-fullName').value.trim();
   const phone = document.getElementById('t-phone').value.trim();
-  if (!fullName || !phone) { toast('กรุณากรอกชื่อและเบอร์โทรให้ครบ'); return; }
-  const busIds = Array.from(document.querySelectorAll('#t-buses .chip.selected')).map(c => c.dataset.bus);
+  const password = document.getElementById('t-password').value;
+  if (!fullName || !phone || !password) { toast('กรุณากรอกชื่อ เบอร์โทร และรหัสผ่านให้ครบ'); return; }
 
   const r = await api('reg.submitTeacher', {
     ticket: state.ticket, fullName: fullName, phone: phone,
-    employeeCode: document.getElementById('t-employeeCode').value.trim(), requestedBusIds: busIds
+    nickname: document.getElementById('t-nickname').value.trim(), password: password
   });
   if (!r.ok) { toast(r.error.message); return; }
   applySession_(r.data);
@@ -522,7 +516,7 @@ document.getElementById('btn-goto-home').addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 
 function renderHomeFromData_(data) {
-  document.getElementById('s01-name').textContent = data.profile.name;
+  document.getElementById('s01-name').textContent = data.profile.nickname ? data.profile.name + ' (' + data.profile.nickname + ')' : data.profile.name;
   document.getElementById('s01-role').textContent = data.profile.role || '';
   document.getElementById('s01-sponsor').textContent = data.profile.registered_by_name
     ? 'เพิ่มโดย ' + data.profile.registered_by_name : '';
@@ -1264,7 +1258,7 @@ function renderUsersList_(users) {
   list.innerHTML = users.map(u => (
     '<div class="roster-row" data-user="' + u.user_id + '" style="flex-direction:column;align-items:stretch;gap:6px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-    '<div><div class="name">' + u.display_name + '</div><div class="meta">เข้าใช้ล่าสุด ' + (u.last_login_at ? new Date(u.last_login_at).toLocaleString('th-TH') : 'ยังไม่เคย') + '</div></div>' +
+    '<div><div class="name">' + u.display_name + (u.nickname ? ' (' + u.nickname + ')' : '') + '</div><div class="meta">เข้าใช้ล่าสุด ' + (u.last_login_at ? new Date(u.last_login_at).toLocaleString('th-TH') : 'ยังไม่เคย') + '</div></div>' +
     '<span class="status-badge" style="background:' + (u.status === 'ACTIVE' ? 'var(--color-board-badge)' : u.status === 'SUSPENDED' ? 'var(--color-error-badge)' : 'var(--color-absent-badge)') + '">' + u.status + '</span>' +
     '</div>' +
     '<div style="display:flex;gap:8px;align-items:center;">' +

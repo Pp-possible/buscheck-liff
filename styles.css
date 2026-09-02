@@ -168,6 +168,36 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; touc
 }
 .card-title { font-weight: 700; font-size: var(--text-lg); margin-bottom: var(--space-2); }
 
+/* ---------- S-00 ลงทะเบียน (S-00a→b→c→d) — ตัวบอกขั้นตอน + สแกน QR + ฟอร์ม + สำเร็จ ---------- */
+.reg-steps { display: flex; gap: 6px; padding: var(--space-4) var(--space-4) 0; }
+.reg-steps .seg { flex: 1; height: 4px; border-radius: 999px; background: var(--border); transition: background-color 0.2s var(--ease-out); }
+.reg-steps .seg.done { background: var(--color-board); }
+.reg-steps .seg.active { background: var(--color-primary); }
+
+.reg-section-label { font-weight: 700; font-size: var(--text-sm); color: var(--text-muted); margin: var(--space-5) var(--space-4) 0; text-transform: uppercase; letter-spacing: 0.03em; }
+
+.reg-countdown {
+  margin-top: var(--space-2); display: inline-flex; align-items: center; gap: 6px;
+  font-weight: 700; font-size: var(--text-sm); padding: 4px 12px; border-radius: 999px;
+  background: rgba(46,134,222,0.12); color: var(--color-primary);
+  transition: background-color 0.2s var(--ease-out), color 0.2s var(--ease-out);
+}
+.reg-countdown.warn { background: rgba(241,196,15,0.16); color: var(--color-duplicate-text); }
+.reg-countdown.urgent { background: rgba(231,76,60,0.14); color: var(--color-error); }
+
+/* กรอบมุมสี่มุมทับกล้อง QR — บอกผู้ใช้ว่าต้องเล็ง QR มาไว้ตรงไหน (มาตรฐาน UI ของแอพสแกน) */
+.qr-scan-wrap { position: relative; border-radius: var(--radius-lg); overflow: hidden; background: #000; min-height: 260px; box-shadow: var(--shadow-md); }
+.qr-scan-wrap #qr-reader-vouch { width: 100%; }
+.qr-scan-frame { position: absolute; inset: 0; margin: auto; width: 220px; height: 220px; pointer-events: none; }
+.qr-scan-frame span { position: absolute; width: 28px; height: 28px; border: 3px solid #fff; opacity: 0.9; }
+.qr-scan-frame span:nth-child(1) { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 8px 0 0 0; }
+.qr-scan-frame span:nth-child(2) { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 8px 0 0; }
+.qr-scan-frame span:nth-child(3) { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 8px; }
+.qr-scan-frame span:nth-child(4) { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 8px 0; }
+
+@keyframes reg-success-pop { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+.reg-success-icon { font-size: 64px; color: var(--color-board); text-align: center; margin-bottom: 4px; animation: reg-success-pop 0.4s var(--ease-out); }
+
 /* ---------- S-00a: choose type ---------- */
 .hero { text-align: center; padding: 32px 24px 8px; }
 .hero h1 { font-size: var(--text-2xl); margin: 8px 0 0; }
