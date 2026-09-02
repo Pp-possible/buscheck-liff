@@ -1298,6 +1298,7 @@ function renderUsersList_(users) {
     (grantable.some(r => r.role_code === u.role_code) ? '' : '<option value="' + u.role_code + '" selected disabled>' + u.role_name + ' (ปัจจุบัน)</option>') +
     '</select>' +
     '<button class="btn btn-secondary" style="min-height:36px;padding:6px 10px;font-size:13px;" data-toggle-status="' + u.user_id + '" data-current-status="' + u.status + '">' + (u.status === 'SUSPENDED' ? 'เปิดใช้งาน' : 'ระงับ') + '</button>' +
+    '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-delete-user="' + u.user_id + '" data-name="' + u.display_name + '">ลบถาวร</button>' +
     '</div>' +
     '</div>'
   )).join('');
@@ -1330,6 +1331,18 @@ function renderUsersList_(users) {
     const r = await api(currentlySuspended ? 'user.activate' : 'user.suspend', { userId: userId });
     if (!r.ok) { toast(r.error.message); return; }
     toast(currentlySuspended ? 'เปิดใช้งานแล้ว' : 'ระงับแล้ว');
+    loadUsersList_();
+  })));
+
+  // ลบถาวร — ใช้ได้เฉพาะผู้ใช้ที่ไม่เคยมีประวัติเช็คยอดผูกอยู่เลย (server เช็คซ้ำแล้วปฏิเสธด้วย
+  // E_HAS_HISTORY ถ้ามี) ถ้าเคยใช้งานจริงต้องกด "ระงับ" แทนเสมอ — ลบถาวรกู้คืนไม่ได้
+  list.querySelectorAll('[data-delete-user]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const userId = e.currentTarget.dataset.deleteUser;
+    const name = e.currentTarget.dataset.name;
+    if (!confirm('ลบผู้ใช้ "' + name + '" ถาวร? กู้คืนไม่ได้ (ลบได้เฉพาะคนที่ไม่เคยเช็คยอดมาก่อน)')) return;
+    const r = await api('user.delete', { userId: userId });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('ลบ "' + name + '" ถาวรแล้ว');
     loadUsersList_();
   })));
 }
@@ -1372,8 +1385,11 @@ function renderStudentsList_(students) {
     '<div class="meta">' + [s.student_code, s.class].filter(Boolean).join(' · ') + '</div></div>' +
     '<span class="status-badge ' + (s.status === 'ACTIVE' ? 'badge-open' : 'badge-none') + '">' + (s.status === 'ACTIVE' ? 'ใช้งานอยู่' : 'ระงับ') + '</span>' +
     '</div>' +
-    '<button class="btn btn-secondary" style="min-height:36px;padding:6px 10px;font-size:13px;" data-toggle-student="' + s.student_id + '" data-current-status="' + s.status + '">' +
+    '<div style="display:flex;gap:8px;">' +
+    '<button class="btn btn-secondary" style="flex:1;min-height:36px;padding:6px 10px;font-size:13px;" data-toggle-student="' + s.student_id + '" data-current-status="' + s.status + '">' +
     (s.status === 'ACTIVE' ? 'ระงับ' : 'เปิดใช้งานอีกครั้ง') + '</button>' +
+    '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-delete-student="' + s.student_id + '" data-name="' + s.name + '">ลบถาวร</button>' +
+    '</div>' +
     '</div>'
   )).join('');
 
@@ -1384,6 +1400,18 @@ function renderStudentsList_(students) {
     const r = await api('student.setActive', { studentId: studentId, active: !currentlyActive });
     if (!r.ok) { toast(r.error.message); return; }
     toast(currentlyActive ? 'ระงับแล้ว' : 'เปิดใช้งานอีกครั้งแล้ว');
+    loadStudentsList_();
+  })));
+
+  // ลบถาวร — ใช้ได้เฉพาะนักเรียนที่ไม่เคยมีประวัติเช็คยอดผูกอยู่เลย (server เช็คซ้ำแล้วปฏิเสธด้วย
+  // E_HAS_HISTORY ถ้ามี) ถ้าเคยใช้งานจริงต้องกด "ระงับ" แทนเสมอ — ลบถาวรกู้คืนไม่ได้
+  list.querySelectorAll('[data-delete-student]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const studentId = e.currentTarget.dataset.deleteStudent;
+    const name = e.currentTarget.dataset.name;
+    if (!confirm('ลบนักเรียน "' + name + '" ถาวร? กู้คืนไม่ได้ (ลบได้เฉพาะคนที่ไม่เคยเช็คยอดมาก่อน)')) return;
+    const r = await api('student.delete', { studentId: studentId });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('ลบ "' + name + '" ถาวรแล้ว');
     loadStudentsList_();
   })));
 }

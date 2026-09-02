@@ -8,7 +8,7 @@
      บนมือถือ cache ไฟล์ static พวกนี้แน่นมาก แก้โค้ดแล้ว deploy ขึ้นจริงแล้วแต่ผู้ใช้ยังเห็นของเก่าอยู่ได้
      ทุกครั้งที่แก้ styles.css/app.js/config.js แล้วต้องการให้มือถือดึงของใหม่ทันที ต้องขยับเลขวันที่นี้ขึ้น
      (เปลี่ยน query string ทำให้ browser มองเป็นคนละไฟล์ ข้าม cache เก่าไปเลย ไม่ต้องรอ revalidate) -->
-<link rel="stylesheet" href="styles.css?v=20260902c">
+<link rel="stylesheet" href="styles.css?v=20260902d">
 <script>
   // ตัวจับ error ถาวร — โชว์ error ตรงจอเลยเมื่อมีปัญหาจริงเท่านั้น (ปกติจะไม่ขึ้นอะไร)
   // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้ เวลามีปัญหาจะได้เห็นสาเหตุจากภาพหน้าจอผู้ใช้ได้เลย
@@ -708,7 +708,7 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" onerror="showDebug_('โหลด LIFF SDK ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="showDebug_('โหลด html5-qrcode ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="showDebug_('โหลด qrcodejs ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
-<script src="config.js?v=20260902c"></script>
-<script src="app.js?v=20260902c"></script>
+<script src="config.js?v=20260902d"></script>
+<script src="app.js?v=20260902d"></script>
 </body>
 </html>
