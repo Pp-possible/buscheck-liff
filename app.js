@@ -29,6 +29,7 @@ const state = {
   vouchTicketIdx: 0,
   vouchTimer: null,
   regType: null,   // 'TEACHER' | 'STUDENT'
+  teacherRegPassword: null,   // ผ่านหน้า S-00p แล้วเก็บไว้ส่งอีกทีตอน reg.submitTeacher จริง
   ticket: null,
   sponsor: null,
   html5Qr: null,
@@ -380,15 +381,43 @@ boot();
 // S-00 — ลงทะเบียนด้วย QR ผู้รับรอง
 // ---------------------------------------------------------------------------
 
-document.getElementById('btn-reg-teacher').addEventListener('click', () => startVouchScan_('TEACHER'));
+// จำนวนขั้นตอนของแต่ละ regType ไม่เท่ากัน — ครูมีขั้น "รหัสผ่าน" (S-00p) แทรกก่อนสแกน QR ด้วย ส่วน
+// นักเรียนไม่ต้องผ่านขั้นนี้เลย แถบบอกขั้นตอนจึงต้องคำนวณสด ๆ ตาม regType ทุกครั้งที่เปลี่ยนหน้า
+const REG_STEPS_ = { TEACHER: ['S-00a', 'S-00p', 'S-00b', 'S-00c', 'S-00d'], STUDENT: ['S-00a', 'S-00b', 'S-00c', 'S-00d'] };
+function renderStepBar_(elId, screenName, regType) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const steps = REG_STEPS_[regType] || REG_STEPS_.STUDENT;
+  const activeIdx = Math.max(0, steps.indexOf(screenName));
+  el.innerHTML = steps.map((s, i) => '<span class="seg' + (i < activeIdx ? ' done' : i === activeIdx ? ' active' : '') + '"></span>').join('');
+}
+renderStepBar_('s00a-steps', 'S-00a', 'STUDENT'); // regType ยังไม่ถูกเลือกตอนอยู่หน้านี้ — ใช้ค่าเริ่มต้นไปก่อน
+
+document.getElementById('btn-reg-teacher').addEventListener('click', () => {
+  state.regType = 'TEACHER';
+  document.getElementById('reg-teacher-password').value = '';
+  renderStepBar_('s00p-steps', 'S-00p', 'TEACHER');
+  showScreen('S-00p');
+});
 document.getElementById('btn-reg-student').addEventListener('click', () => startVouchScan_('STUDENT'));
+
+onClickGuarded_('btn-check-teacher-password', async () => {
+  const password = document.getElementById('reg-teacher-password').value;
+  if (!password) { toast('กรุณากรอกรหัสผ่าน'); return; }
+  const r = await api('reg.checkTeacherPassword', { password: password });
+  if (!r.ok) { toast(r.error.message); return; }
+  state.teacherRegPassword = password;
+  startVouchScan_('TEACHER');
+});
 
 function startVouchScan_(regType) {
   state.regType = regType;
+  document.getElementById('s00b-back').dataset.back = regType === 'TEACHER' ? 'S-00p' : 'S-00a';
   document.getElementById('s00b-title').textContent = regType === 'TEACHER' ? 'ลงทะเบียนเป็นครู' : 'ลงทะเบียนเป็นนักเรียน';
   document.getElementById('s00b-instruction').textContent = regType === 'TEACHER'
     ? 'ให้ผู้ดูแลระบบสูงสุดเปิดหน้า "QR รับรองของฉัน" แล้วสแกนที่นี่'
     : 'ให้ครูเปิดหน้า "QR รับรองของฉัน" แล้วสแกนที่นี่';
+  renderStepBar_('s00b-steps', 'S-00b', regType);
   showScreen('S-00b');
   startVouchCamera_();
 }
@@ -464,24 +493,25 @@ function showVouchForm_(data) {
   document.getElementById('s00c-form-teacher').style.display = state.regType === 'TEACHER' ? 'block' : 'none';
   document.getElementById('s00c-form-student').style.display = state.regType === 'STUDENT' ? 'block' : 'none';
 
+  renderStepBar_('s00c-steps', 'S-00c', state.regType);
   showScreen('S-00c');
 }
 
 onClickGuarded_('btn-submit-teacher', async () => {
   const fullName = document.getElementById('t-fullName').value.trim();
   const phone = document.getElementById('t-phone').value.trim();
-  const password = document.getElementById('t-password').value;
-  if (!fullName || !phone || !password) { toast('กรุณากรอกชื่อ เบอร์โทร และรหัสผ่านให้ครบ'); return; }
+  if (!fullName || !phone) { toast('กรุณากรอกชื่อและเบอร์โทรให้ครบ'); return; }
 
   const r = await api('reg.submitTeacher', {
     ticket: state.ticket, fullName: fullName, phone: phone,
-    nickname: document.getElementById('t-nickname').value.trim(), password: password
+    nickname: document.getElementById('t-nickname').value.trim(), password: state.teacherRegPassword
   });
   if (!r.ok) { toast(r.error.message); return; }
   applySession_(r.data);
   clearInterval(s00cTimer);
   document.getElementById('s00d-message').textContent = 'ลงทะเบียนสำเร็จ · สิทธิ์: ' + (r.data.user.role || 'ครูประจำรถ') + ' · รับรองโดย ' + state.sponsor.name;
   document.getElementById('s00d-qr-box').style.display = 'none';
+  renderStepBar_('s00d-steps', 'S-00d', state.regType);
   showScreen('S-00d');
 });
 
@@ -503,6 +533,7 @@ onClickGuarded_('btn-submit-student', async () => {
   document.getElementById('s00d-message').textContent = 'ลงทะเบียนสำเร็จ · ใช้ QR นี้ให้ครูสแกนตอนขึ้น-ลงรถ';
   document.getElementById('s00d-qr-box').style.display = 'block';
   renderQr_('s00d-qr-canvas', r.data.qrPayload);
+  renderStepBar_('s00d-steps', 'S-00d', state.regType);
   showScreen('S-00d');
 });
 
