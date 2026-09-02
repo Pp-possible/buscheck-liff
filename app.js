@@ -793,7 +793,6 @@ function renderSessionBusCards_(rounds, opts) {
 
     html += '<div class="row1"><span class="status-badge">' + (busLabel || '—') + '</span> ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
       '<div class="progress">' + checkers + '</div>' +
-      (round.duplicateAttempts > 0 ? '<div class="warn">' + ic('alert-triangle') + ' มีการเช็คซ้ำ ' + round.duplicateAttempts + ' ครั้ง</div>' : '') +
       (isPlanned && !archivedList && isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
       (isPlanned && !archivedList && !isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-wait-open="1">รอเปิด</button>' : '') +
       (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
@@ -1051,54 +1050,52 @@ function initDaySummaryScreen_() {
   loadDaySummary_();
 }
 
-function busHalfStatusLabel_(status) {
-  return status === 'OPEN' ? 'เปิดอยู่' : status === 'CLOSED' ? 'ปิดแล้ว' : status === 'PLANNED' ? 'รอเปิด' : 'ไม่มีรอบ';
-}
-function busHalfStatusClass_(status) {
-  return status === 'OPEN' ? 'badge-open' : status === 'CLOSED' ? 'badge-closed' : 'badge-none';
-}
-
-// รวมสถานะรอบทุกรอบของคันรถนี้ (ช่วงเดียว) ให้เหลือค่าเดียว — มีรอบไหน OPEN ถือว่า "เปิดอยู่" ก่อน,
-// ปิดหมดทุกรอบถือว่า "ปิดแล้ว", ไม่งั้นคือ "รอเปิด" (ยังไม่มีรอบไหนเปิดเลย), ไม่มีรอบเลยคือ "ไม่มีรอบ"
-function aggregateBusHalfStatus_(rounds) {
-  if (!rounds.length) return 'NONE';
-  if (rounds.some(r => r.status === 'OPEN')) return 'OPEN';
-  if (rounds.every(r => r.status === 'CLOSED')) return 'CLOSED';
-  return 'PLANNED';
+// สถานะรวมของ "รอบเช็ค" หนึ่งกลุ่ม (ทุกคันรถของชื่อรอบ+ประเภท+เวลาเดียวกัน) แสดงเป็น badge เดียว —
+// ไม่มีแนวคิดเช้า/บ่ายเข้ามาเกี่ยวข้องเลย ยึดตามเวลาจริงที่ตั้งไว้ (scheduled_at) ของแต่ละรอบเท่านั้น
+function sessionStatusMeta_(status) {
+  if (status === 'CLOSED') return { label: 'เสร็จแล้ว', cls: 'badge-closed', icon: ic('check-circle') };
+  if (status === 'OPEN') return { label: 'กำลังดำเนินการ', cls: 'badge-open', icon: ic('refresh') };
+  return { label: 'รอเปิด', cls: 'badge-none', icon: ic('clock') };
 }
 
-// dashboard ต่อคันรถ — รวมรอบเช้า+บ่ายของแต่ละคันเข้าด้วยกัน ไม่ต้องสลับดูทีละช่วงอีกต่อไป
-function buildBusDashboard_(amRounds, pmRounds) {
-  const byBus = {};
-  const add = (rounds, key) => {
-    (rounds || []).forEach(r => {
-      if (r.scope_type !== 'BUS' || !r.scope_id) return;
-      if (!byBus[r.scope_id]) byBus[r.scope_id] = { bus_id: r.scope_id, am: [], pm: [] };
-      byBus[r.scope_id][key].push(r);
-    });
-  };
-  add(amRounds, 'am');
-  add(pmRounds, 'pm');
-  const sum = (list, field) => list.reduce((s, r) => s + (r[field] || 0), 0);
-  return Object.values(byBus).map(b => ({
-    bus_id: b.bus_id,
-    bus_name: (state.busMap && state.busMap[b.bus_id]) || b.bus_id,
-    am: { expected: sum(b.am, 'expected'), checked: sum(b.am, 'checked'), status: aggregateBusHalfStatus_(b.am) },
-    pm: { expected: sum(b.pm, 'expected'), checked: sum(b.pm, 'checked'), status: aggregateBusHalfStatus_(b.pm) }
-  })).sort((a, b) => a.bus_name.localeCompare(b.bus_name, 'th'));
+// การ์ด dashboard ของ "รอบเช็ค" หนึ่งกลุ่ม — โชว์ทั้งตัวเลขจริง (checked/expected) และ progress bar
+// เสมอคู่กัน (ไม่ใช้สีสื่อสถานะเพียงอย่างเดียว) กดแล้วเจาะดูรายคันรถได้ที่หน้าเดียวกับ S-02/S-14
+function renderSessionDashboardCard_(group) {
+  const typeLabel = ROUND_TYPE_LABELS_[group.round_type] || group.round_type;
+  const status = aggregateGroupStatus_(group);
+  const meta = sessionStatusMeta_(status);
+  const checked = group.rounds.reduce((s, r) => s + (r.checked || 0), 0);
+  const expected = group.rounds.reduce((s, r) => s + (r.expected || 0), 0);
+  const pct = expected ? Math.round((checked / expected) * 100) : 0;
+  return '<div class="round-item"><div class="round-item-content" data-open-group="' + group.key + '">' +
+    '<div class="row1"><span class="status-badge ' + meta.cls + '">' + meta.icon + ' ' + meta.label + '</span> ' + formatThaiDateTime_(group.scheduled_at) + '</div>' +
+    '<div class="progress">' + typeLabel + ' · ' + group.round_name + ' · ' + group.rounds.length + ' คัน</div>' +
+    '<div class="progress-bar" style="margin:6px 0 4px;"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
+    '<div class="progress">' + checked + '/' + expected + ' คน (' + pct + '%)</div>' +
+    '<div class="drill-hint">ดูรายคันรถ →</div>' +
+    '</div></div>';
 }
 
-function renderBusDashboard_(buses) {
-  if (!buses.length) return '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>';
-  const half = (h, label) => h.status === 'NONE'
-    ? '<div class="progress">' + label + ': ไม่มีรอบ</div>'
-    : '<div class="progress"><span class="status-badge ' + busHalfStatusClass_(h.status) + '" style="margin-right:6px;">' + busHalfStatusLabel_(h.status) + '</span>' + label + ' ' + h.checked + '/' + h.expected + ' คน</div>';
-  return buses.map(b => (
-    '<div class="round-item"><div class="round-item-content">' +
-    '<div class="row1" style="font-weight:700;">' + b.bus_name + '</div>' +
-    half(b.am, 'เช้า') + half(b.pm, 'บ่าย') +
-    '</div></div>'
-  )).join('');
+// dashboard หลักของหน้านี้ — เอารอบของ "ทั้งวัน" (เช้า+บ่ายรวมกัน จาก backend สองก้อน) มาจัดกลุ่มเป็น
+// รอบเช็คแล้วเรียงตามเวลาจริงจากรอบแรกไปหลัง (อ่านเป็นลำดับเหตุการณ์ของวันนี้ ไม่ใช่ "ล่าสุดก่อน" แบบ S-02)
+function renderSessionDashboard_(amRounds, pmRounds) {
+  const rounds = (amRounds || []).concat(pmRounds || []);
+  if (!rounds.length) return '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>';
+  state.roundsById = state.roundsById || {};
+  rounds.forEach(r => { state.roundsById[r.round_id] = r; });
+  state.activeRoundsRaw = rounds;
+
+  const groups = groupRoundsForDisplay_(rounds).slice()
+    .sort((a, b) => String(a.scheduled_at || '').localeCompare(String(b.scheduled_at || '')));
+  return groups.map(renderSessionDashboardCard_).join('');
+}
+
+function wireSessionDashboardCards_() {
+  document.querySelectorAll('#s07-summary [data-open-group]').forEach(el => el.addEventListener('click', () => {
+    const groups = groupRoundsForDisplay_(state.activeRoundsRaw || []);
+    const group = groups.find(g => g.key === el.dataset.openGroup);
+    if (group) navigateToSession_(group, false, 'S-07');
+  }));
 }
 
 async function loadDaySummary_() {
@@ -1115,59 +1112,79 @@ async function loadDaySummary_() {
     return;
   }
   setSyncBadge_('s07-sync', 'fresh', Date.now());
-  state.s07Data = { AM: amR.data, PM: pmR.data };
   renderDaySummary_(amR.data, pmR.data);
 }
 
-function renderDaySummary_(am, pm) {
+// สถานะปิดยอดของวันนี้ "ก้อนเดียว" ไม่แยกเช้า/บ่ายให้ผู้ใช้ต้องเลือก — ข้างในยังเรียก day.close/
+// day.unaccounted แยกช่วงตามที่ backend ต้องการ (โครงสร้างข้อมูลเดิมยังอิง AM/PM อยู่จริง) แต่รวมผล
+// เป็นคำตอบเดียวว่า "ปิดได้หรือยัง" ให้ผู้ใช้ไม่ต้องรับรู้เรื่องช่วงเวลาเลย
+function renderCloseStatus_(am, pm) {
   const canClose = state.permissions.indexOf('day.close') !== -1;
-  const buses = buildBusDashboard_(am.rounds, pm.rounds);
+  const directions = [am, pm].filter(d => d.totals.expected > 0 || d.status === 'CLOSED');
+  if (!directions.length) return '';
 
-  const closeRow_ = (label, d, dir) => {
-    if (d.canClose) {
-      return '<div class="card" style="margin:12px 16px;">' +
-        '<div class="row1" style="font-weight:700;">' + label + (d.status === 'CLOSED' ? ' — ปิดยอดแล้ว' : ' — ยอดครบแล้ว') + '</div>' +
-        (d.status !== 'CLOSED' && canClose ? '<button class="btn btn-primary btn-block" style="margin-top:8px;" data-day-close="' + dir + '">' + ic('check-circle') + ' ปิดยอด' + label + '</button>' : '') +
-        '</div>';
-    }
+  if (directions.every(d => d.status === 'CLOSED')) {
+    return '<div class="card" style="margin:12px 16px;"><div class="row1" style="font-weight:700;">' + ic('check-circle', 'icon-ok') + ' ปิดยอดวันนี้ครบแล้ว</div></div>';
+  }
+
+  const pending = directions.filter(d => d.status !== 'CLOSED');
+  const totalUnaccounted = pending.reduce((s, d) => s + d.totals.unaccounted, 0);
+  if (totalUnaccounted > 0) {
     return '<div class="card" style="margin:12px 16px;border-color:var(--color-error);">' +
-      '<div style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ' + label + ' — ยังปิดไม่ได้ เหลือ ' + d.totals.unaccounted + ' คน</div>' +
-      '<button class="btn btn-secondary btn-block" style="margin-top:10px;" data-view-missing="' + dir + '">ดูว่าใครหาย →</button>' +
+      '<div style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ยังปิดยอดไม่ได้ — เหลือ ' + totalUnaccounted + ' คน</div>' +
+      '<button class="btn btn-secondary btn-block" style="margin-top:10px;" id="btn-day-view-missing">ดูว่าใครหาย →</button>' +
       '</div>';
-  };
-
-  document.getElementById('s07-summary').innerHTML =
-    '<div style="padding:4px 16px 0;font-weight:700;">ยอดตามคันรถ</div>' +
-    renderBusDashboard_(buses) +
-    closeRow_('เช้า', am, 'AM') +
-    closeRow_('บ่าย', pm, 'PM');
-
-  document.querySelectorAll('#s07-summary [data-day-close]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
-    const dir = e.currentTarget.dataset.dayClose;
-    const r = await api('day.close', { direction: dir });
-    if (!r.ok) { toast(r.error.message); return; }
-    toast('ปิดยอด' + (dir === 'AM' ? 'เช้า' : 'บ่าย') + 'แล้ว');
-    loadDaySummary_();
-  })));
-  document.querySelectorAll('#s07-summary [data-view-missing]').forEach(btn => btn.addEventListener('click', () => loadReconcile_(btn.dataset.viewMissing)));
+  }
+  if (canClose) {
+    return '<div class="card" style="margin:12px 16px;">' +
+      '<div class="row1" style="font-weight:700;">' + ic('check-circle', 'icon-ok') + ' ยอดครบแล้ว พร้อมปิดยอด</div>' +
+      '<button class="btn btn-primary btn-block" style="margin-top:8px;" id="btn-day-close">ปิดยอดวันนี้</button>' +
+      '</div>';
+  }
+  return '<div class="empty-state">ยอดครบแล้ว รอผู้ดูแลกดปิดยอด</div>';
 }
 
-async function loadReconcile_(direction) {
+function renderDaySummary_(am, pm) {
+  document.getElementById('s07-summary').innerHTML =
+    renderSessionDashboard_(am.rounds, pm.rounds) +
+    renderCloseStatus_(am, pm);
+
+  wireSessionDashboardCards_();
+
+  const closeBtn = document.getElementById('btn-day-close');
+  if (closeBtn) closeBtn.addEventListener('click', guardClick_(async () => {
+    const pending = [am, pm].filter(d => d.status !== 'CLOSED' && d.canClose);
+    const results = await Promise.all(pending.map(d => api('day.close', { direction: d.direction })));
+    const failed = results.find(r => !r.ok);
+    toast(failed ? failed.error.message : 'ปิดยอดวันนี้แล้ว');
+    loadDaySummary_();
+  }));
+  const missingBtn = document.getElementById('btn-day-view-missing');
+  if (missingBtn) missingBtn.addEventListener('click', () => loadReconcile_());
+}
+
+async function loadReconcile_() {
   const wrap = document.getElementById('s07-reconcile');
   wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
   const date = new Date().toISOString().slice(0, 10);
-  const r = await api('day.unaccounted', { date: date, direction: direction });
-  if (!r.ok) { wrap.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
-  renderReconcile_(r.data.items, date, direction);
+  const [amR, pmR] = await Promise.all([
+    api('day.unaccounted', { date: date, direction: 'AM' }),
+    api('day.unaccounted', { date: date, direction: 'PM' })
+  ]);
+  if (!amR.ok && !pmR.ok) { wrap.innerHTML = '<div class="empty-state">' + amR.error.message + '</div>'; return; }
+  const items = (amR.ok ? amR.data.items.map(it => Object.assign({}, it, { direction: 'AM' })) : [])
+    .concat(pmR.ok ? pmR.data.items.map(it => Object.assign({}, it, { direction: 'PM' })) : []);
+  renderReconcile_(items, date);
 }
 
-function renderReconcile_(items, date, direction) {
+// รายชื่อคนค้างของทั้งวันรวมเป็นลิสต์เดียว (ไม่แยกการ์ดเช้า/บ่าย) — แต่ละคนยังจำ direction ของตัวเอง
+// ไว้ใน dataset เพื่อส่งกลับไปกับ day.resolve ให้ถูกช่วง โดยผู้ใช้ไม่ต้องเลือกเองว่าเป็นช่วงไหน
+function renderReconcile_(items, date) {
   const wrap = document.getElementById('s07-reconcile');
-  const dirLabel = direction === 'AM' ? 'เช้า' : 'บ่าย';
-  if (!items.length) { wrap.innerHTML = '<div class="empty-state">ไม่มีใครค้างในช่วง' + dirLabel + 'แล้ว</div>'; return; }
+  if (!items.length) { wrap.innerHTML = '<div class="empty-state">ไม่มีใครค้างแล้ว</div>'; return; }
   const canResolve = state.permissions.indexOf('day.resolve') !== -1;
 
-  wrap.innerHTML = '<div style="padding:0 16px;font-weight:700;margin:10px 0;">ช่วง' + dirLabel + ' — เหลือ ' + items.length + ' คนที่ยังไม่ลงตัว</div>' +
+  wrap.innerHTML = '<div style="padding:0 16px;font-weight:700;margin:10px 0;">เหลือ ' + items.length + ' คนที่ยังไม่ลงตัว</div>' +
     items.map(it => (
       '<div class="card" style="margin:10px 16px;' + (it.severity === 'CRITICAL' ? 'border-color:var(--color-error);' : '') + '">' +
       '<div style="font-weight:700;">' + (it.severity === 'CRITICAL' ? ic('alert-octagon', 'icon-error') : ic('alert-triangle', 'icon-amber')) + ' ' + it.name + ' · ' + it.class + '</div>' +
@@ -1177,7 +1194,7 @@ function renderReconcile_(items, date, direction) {
       (canResolve
         ? '<div class="chip-group" style="margin-top:8px;">' +
         it.suggestedReasons.filter(rc => REASON_STATUS_MAP_[rc]).map(rc =>
-          '<div class="chip" data-resolve="' + it.student_id + '" data-reason="' + rc + '" data-status="' + REASON_STATUS_MAP_[rc] + '">' + (REASON_LABELS_[rc] || rc) + '</div>'
+          '<div class="chip" data-resolve="' + it.student_id + '" data-reason="' + rc + '" data-status="' + REASON_STATUS_MAP_[rc] + '" data-direction="' + it.direction + '">' + (REASON_LABELS_[rc] || rc) + '</div>'
         ).join('') +
         '</div>'
         : '') +
@@ -1188,10 +1205,11 @@ function renderReconcile_(items, date, direction) {
     const studentId = e.currentTarget.dataset.resolve;
     const reasonCode = e.currentTarget.dataset.reason;
     const status = e.currentTarget.dataset.status;
+    const direction = e.currentTarget.dataset.direction;
     const r = await api('day.resolve', { date: date, direction: direction, items: [{ studentId: studentId, status: status, reasonCode: reasonCode }] });
     if (!r.ok) { toast(r.error.message); return; }
     toast('บันทึกแล้ว');
-    loadReconcile_(direction);
+    loadReconcile_();
     loadDaySummary_();
   })));
 }
@@ -2128,7 +2146,7 @@ function renderStudentHistoryItem_(h) {
     '<div class="row1">' + thaiDateNow(h.checked_at) + ' · ' + timeText + ' น.</div>' +
     '<div class="progress">' + [typeLabel, h.round_name].filter(Boolean).join(' · ') + '</div>' +
     '<div class="progress">' + [h.bus_name, h.checked_by_name ? 'สแกนโดย ' + h.checked_by_name : ''].filter(Boolean).join(' · ') + '</div>' +
-    (h.transferred_from_bus_name ? '<div class="warn">' + ic('transfer') + ' ย้ายมาจาก ' + h.transferred_from_bus_name + '</div>' : '') +
+    (h.transferred_from_bus_name ? '<div class="warn">' + ic('transfer') + ' ย้ายรถ: ' + h.transferred_from_bus_name + ' → ' + (h.bus_name || '—') + '</div>' : '') +
     '</div></div>';
 }
 
