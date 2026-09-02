@@ -674,6 +674,11 @@ function renderRoundsList_(rounds, opts) {
   const list = document.getElementById(opts.listElId || 's02-list');
   if (archivedList) state.archivedRoundsRaw = rounds; else state.activeRoundsRaw = rounds;
 
+  // หัวหน้าสาย (SUPERVISOR) ลงมาสร้างรอบเช็คเองไม่ได้ — รอผู้ดูแลระบบ (level >= 80) สร้างให้เท่านั้น
+  // ต้องอยู่ก่อน early-return ด้านล่าง ไม่งั้นวันที่ยังไม่มีรอบเช็คเลยปุ่มจะไม่ถูกซ่อน
+  const newRoundBtn = document.getElementById('btn-new-round');
+  if (newRoundBtn) newRoundBtn.style.display = (state.profile && state.profile.level >= 80) ? '' : 'none';
+
   if (!rounds.length) {
     list.innerHTML = '<div class="empty-state">' + (archivedList ? 'ยังไม่มีรอบที่เก็บไว้' : 'วันนี้ยังไม่มีรอบเช็ค') + '</div>';
     return;
@@ -789,6 +794,8 @@ function renderSessionBusCards_(rounds, opts) {
   const canManage = state.permissions && state.permissions.indexOf('round.open') !== -1;
   const canEdit = state.permissions && state.permissions.indexOf('round.edit') !== -1;
   const isSuperAdmin = !!(state.profile && state.profile.level === 100);
+  // หัวหน้าสาย (SUPERVISOR) ลงมาทำซ้ำรอบไม่ได้เหมือนกัน เพราะ "ทำซ้ำ" คือสร้างรอบใหม่ (round.create)
+  const canCreateRound = !!(state.profile && state.profile.level >= 80);
 
   list.innerHTML = rounds.map(round => {
     const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
@@ -823,7 +830,7 @@ function renderSessionBusCards_(rounds, opts) {
       (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
       (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
       ((isPlanned || round.status === 'OPEN') && canEdit ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
-      (canManage && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-duplicate="' + round.round_id + '">ทำซ้ำ</button>' : '') +
+      (canManage && canCreateRound && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-duplicate="' + round.round_id + '">ทำซ้ำ</button>' : '') +
       (canManage && archivedList ? '<button class="btn btn-danger" style="margin-top:8px" data-delete-permanent="' + round.round_id + '">ลบถาวร</button>' : '') +
       '</div></div>';
     return html;
