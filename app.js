@@ -28,6 +28,7 @@ const state = {
   vouchTickets: [],
   vouchTicketIdx: 0,
   vouchTimer: null,
+  studentQrTimer: null,
   regType: null,   // 'TEACHER' | 'STUDENT'
   teacherRegPassword: null,   // ผ่านหน้า S-00p แล้วเก็บไว้ส่งอีกทีตอน reg.submitTeacher จริง
   ticket: null,
@@ -171,6 +172,7 @@ function showScreen(name) {
   if (name !== 'S-03' && state.html5Qr) stopScanCamera_();
   if (name !== 'S-00b' && state.html5QrVouch) stopVouchCamera_();
   if (name !== 'S-19' && state.vouchTimer) { clearInterval(state.vouchTimer); state.vouchTimer = null; }
+  if (name !== 'S-21' && name !== 'S-00d' && state.studentQrTimer) { clearInterval(state.studentQrTimer); state.studentQrTimer = null; }
 }
 
 document.addEventListener('click', (e) => {
@@ -530,9 +532,9 @@ onClickGuarded_('btn-submit-student', async () => {
   if (!r.ok) { toast(r.error.message); return; }
   applySession_({ sessionToken: r.data.sessionToken, persona: 'STUDENT', profile: r.data.student, permissions: [] });
   clearInterval(s00cTimer);
-  document.getElementById('s00d-message').textContent = 'ลงทะเบียนสำเร็จ · ใช้ QR นี้ให้ครูสแกนตอนขึ้น-ลงรถ';
+  document.getElementById('s00d-message').textContent = 'ลงทะเบียนสำเร็จ · ใช้ QR นี้ให้ครูสแกนตอนขึ้น-ลงรถ (QR เปลี่ยนอัตโนมัติทุก 20 วิ)';
   document.getElementById('s00d-qr-box').style.display = 'block';
-  renderQr_('s00d-qr-canvas', r.data.qrPayload);
+  startStudentQrLoop_(r.data.qrBatch, 's00d-qr-canvas');
   renderStepBar_('s00d-steps', 'S-00d', state.regType);
   showScreen('S-00d');
 });
@@ -2130,10 +2132,44 @@ async function loadStudentHome_(opts) {
     : '<svg class="icon"><use href="#i-user"/></svg>';
 
   const qrCard = document.getElementById('s21-qr-card');
-  if (d.qrPayload) { qrCard.style.display = 'block'; renderQr_('s21-qr-canvas', d.qrPayload); }
-  else qrCard.style.display = 'none';
+  if (d.qrBatch && d.qrBatch.length) { qrCard.style.display = 'block'; startStudentQrLoop_(d.qrBatch); }
+  else { qrCard.style.display = 'none'; if (state.studentQrTimer) { clearInterval(state.studentQrTimer); state.studentQrTimer = null; } }
 
   setSyncBadge_('s21-sync', 'fresh', Date.now());
+}
+
+// QR ประจำตัวนักเรียนหมุนทุก ~20 วิ เหมือนของครู (S-19) — วนแสดงจากชุดที่ได้มาในเครื่องเอง ไม่ต้อง
+// เรียกเซิร์ฟเวอร์ทุกครั้ง จนกว่าจะใกล้หมดชุด (เหลือน้อยกว่า 1 นาที) ถึงค่อยขอชุดใหม่ผ่าน loadStudentHome_
+// (ใช้ร่วมกัน 2 จอ: S-21 หน้าแรกนักเรียน กับ S-00d จอสรุปหลังลงทะเบียนเสร็จใหม่ ๆ — ระบุ canvasId เอง)
+function startStudentQrLoop_(tokens, canvasId) {
+  state.studentQrTokens = tokens;
+  state.studentQrIdx = 0;
+  state.studentQrCanvasId = canvasId || 's21-qr-canvas';
+  state.studentQrCountdownId = state.studentQrCanvasId === 's00d-qr-canvas' ? 's00d-countdown' : 's21-countdown';
+  if (state.studentQrTimer) clearInterval(state.studentQrTimer);
+  state.studentQrTimer = setInterval(tickStudentQr_, 1000);
+  tickStudentQr_();
+}
+
+function tickStudentQr_() {
+  if (!state.studentQrTokens || !state.studentQrTokens.length) return;
+  const now = Date.now();
+  let idx = state.studentQrIdx;
+  while (idx < state.studentQrTokens.length - 1 && new Date(state.studentQrTokens[idx].validTo).getTime() < now) idx++;
+  state.studentQrIdx = idx;
+  const tokenObj = state.studentQrTokens[idx];
+  renderQr_(state.studentQrCanvasId, tokenObj.payload);
+  const left = Math.max(0, Math.round((new Date(tokenObj.validTo).getTime() - now) / 1000));
+  const countdownEl = document.getElementById(state.studentQrCountdownId);
+  if (countdownEl) countdownEl.innerHTML = ic('refresh') + ' เปลี่ยนใหม่ใน ' + left + ' วินาที';
+
+  // ขอชุดใหม่อัตโนมัติเฉพาะตอนอยู่หน้า S-21 เท่านั้น — จอ S-00d เป็นจอผ่านครั้งเดียวหลังลงทะเบียน
+  // เสร็จใหม่ ๆ ผู้ใช้จะกดไปหน้าหลักก่อนหมด batch (5 นาที) แทบทุกกรณีอยู่แล้ว ไม่จำเป็นต้อง refresh
+  const msLeftInBatch = new Date(state.studentQrTokens[state.studentQrTokens.length - 1].validTo).getTime() - now;
+  if (idx >= state.studentQrTokens.length - 2 && msLeftInBatch < 60000 && !state.studentQrRefreshing && state.studentQrCanvasId === 's21-qr-canvas') {
+    state.studentQrRefreshing = true;
+    loadStudentHome_().finally(() => { state.studentQrRefreshing = false; });
+  }
 }
 
 document.getElementById('btn-refresh-student-home').addEventListener('click', () => loadStudentHome_());
