@@ -1065,17 +1065,6 @@ onClickGuarded_('btn-s16-checker-run', async () => {
 // S-07 สรุปยอดวัน + หน้ากระทบยอด "ใครหาย เพราะอะไร"
 // ---------------------------------------------------------------------------
 
-// จับคู่ reason_code → day_status เป้าหมายตาม Reasons.applies_to (ดู schema.js REASON_DEFAULTS) —
-// ไม่มี action ให้ดึงชีทนี้ผ่าน API จึงต้องจับคู่ตรงนี้ให้ตรงกับค่าที่ seed ไว้จริง
-const REASON_STATUS_MAP_ = {
-  SICK: 'ABSENT', LEAVE: 'ABSENT', PARENT_PICKUP: 'EXCUSED', OTHER_BUS_CONFIRMED: 'UNRESOLVED',
-  PICKED_UP_AT_SCHOOL: 'EXCUSED', SCAN_MISSED: 'UNRESOLVED', STILL_SEARCHING: 'UNRESOLVED'
-};
-const REASON_LABELS_ = {
-  SICK: 'ป่วย', LEAVE: 'ลากิจ', PARENT_PICKUP: 'ผู้ปกครองรับเอง', OTHER_BUS_CONFIRMED: 'ยืนยันแล้วว่าขึ้นรถคันอื่น',
-  PICKED_UP_AT_SCHOOL: 'ผู้ปกครองมารับที่โรงเรียน', SCAN_MISSED: 'ขึ้น-ลงจริงแต่ลืมสแกน', STILL_SEARCHING: 'ยังตามหาอยู่'
-};
-
 document.getElementById('btn-refresh-daysummary').addEventListener('click', () => loadDaySummary_());
 
 function initDaySummaryScreen_() {
@@ -1133,7 +1122,6 @@ function wireSessionDashboardCards_() {
 async function loadDaySummary_() {
   const wrap = document.getElementById('s07-summary');
   wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
-  document.getElementById('s07-reconcile').innerHTML = '';
   setSyncBadge_('s07-sync', 'loading');
   const [amR, pmR] = await Promise.all([
     api('day.summary', { direction: 'AM' }), api('day.summary', { direction: 'PM' }), ensureBusMap_()
@@ -1147,9 +1135,11 @@ async function loadDaySummary_() {
   renderDaySummary_(amR.data, pmR.data);
 }
 
-// สถานะปิดยอดของวันนี้ "ก้อนเดียว" ไม่แยกเช้า/บ่ายให้ผู้ใช้ต้องเลือก — ข้างในยังเรียก day.close/
-// day.unaccounted แยกช่วงตามที่ backend ต้องการ (โครงสร้างข้อมูลเดิมยังอิง AM/PM อยู่จริง) แต่รวมผล
-// เป็นคำตอบเดียวว่า "ปิดได้หรือยัง" ให้ผู้ใช้ไม่ต้องรับรู้เรื่องช่วงเวลาเลย
+// สถานะปิดยอดของวันนี้ "ก้อนเดียว" ไม่แยกเช้า/บ่ายให้ผู้ใช้ต้องเลือก — ข้างในยังเรียก day.close
+// แยกช่วงตามที่ backend ต้องการ (โครงสร้างข้อมูลเดิมยังอิง AM/PM อยู่จริง) แต่รวมผลเป็นคำตอบเดียวว่า
+// "ปิดได้หรือยัง" ให้ผู้ใช้ไม่ต้องรับรู้เรื่องช่วงเวลาเลย — ปิดยอดวันขึ้นกับ "ทุกรอบเช็ค/เที่ยวรถของ
+// วันนั้นปิดครบแล้ว" เท่านั้น (canClose/blockers มาจาก backend ตรง ๆ ไม่คำนวณ unaccounted เองอีกแล้ว
+// เพราะแต่ละรอบเป็นอิสระต่อกัน ไม่ต้องรอ "ขึ้นรถ" คู่กับ "ลงรถ" ให้ครบถึงจะปิดยอดได้)
 function renderCloseStatus_(am, pm) {
   const canClose = state.permissions.indexOf('day.close') !== -1;
   const directions = [am, pm].filter(d => d.totals.expected > 0 || d.status === 'CLOSED');
@@ -1160,11 +1150,11 @@ function renderCloseStatus_(am, pm) {
   }
 
   const pending = directions.filter(d => d.status !== 'CLOSED');
-  const totalUnaccounted = pending.reduce((s, d) => s + d.totals.unaccounted, 0);
-  if (totalUnaccounted > 0) {
+  const totalBlocked = pending.reduce((s, d) => s + (d.blockers || []).reduce((s2, b) => s2 + b.count, 0), 0);
+  if (totalBlocked > 0) {
     return '<div class="card" style="margin:12px 16px;border-color:var(--color-error);">' +
-      '<div style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ยังปิดยอดไม่ได้ — เหลือ ' + totalUnaccounted + ' คน</div>' +
-      '<button class="btn btn-secondary btn-block" style="margin-top:10px;" id="btn-day-view-missing">ดูว่าใครหาย →</button>' +
+      '<div style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ยังปิดยอดไม่ได้ — ยังมีรอบเช็ค/เที่ยวรถที่ยังไม่ปิดอยู่ ' + totalBlocked + ' รายการ</div>' +
+      '<div class="progress">ปิดรอบเช็คและเที่ยวรถของวันนี้ให้ครบก่อน แล้วกลับมาที่นี่</div>' +
       '</div>';
   }
   if (canClose) {
@@ -1191,59 +1181,6 @@ function renderDaySummary_(am, pm) {
     toast(failed ? failed.error.message : 'ปิดยอดวันนี้แล้ว');
     loadDaySummary_();
   }));
-  const missingBtn = document.getElementById('btn-day-view-missing');
-  if (missingBtn) missingBtn.addEventListener('click', () => loadReconcile_());
-}
-
-async function loadReconcile_() {
-  const wrap = document.getElementById('s07-reconcile');
-  wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
-  const date = new Date().toISOString().slice(0, 10);
-  const [amR, pmR] = await Promise.all([
-    api('day.unaccounted', { date: date, direction: 'AM' }),
-    api('day.unaccounted', { date: date, direction: 'PM' })
-  ]);
-  if (!amR.ok && !pmR.ok) { wrap.innerHTML = '<div class="empty-state">' + amR.error.message + '</div>'; return; }
-  const items = (amR.ok ? amR.data.items.map(it => Object.assign({}, it, { direction: 'AM' })) : [])
-    .concat(pmR.ok ? pmR.data.items.map(it => Object.assign({}, it, { direction: 'PM' })) : []);
-  renderReconcile_(items, date);
-}
-
-// รายชื่อคนค้างของทั้งวันรวมเป็นลิสต์เดียว (ไม่แยกการ์ดเช้า/บ่าย) — แต่ละคนยังจำ direction ของตัวเอง
-// ไว้ใน dataset เพื่อส่งกลับไปกับ day.resolve ให้ถูกช่วง โดยผู้ใช้ไม่ต้องเลือกเองว่าเป็นช่วงไหน
-function renderReconcile_(items, date) {
-  const wrap = document.getElementById('s07-reconcile');
-  if (!items.length) { wrap.innerHTML = '<div class="empty-state">ไม่มีใครค้างแล้ว</div>'; return; }
-  const canResolve = state.permissions.indexOf('day.resolve') !== -1;
-
-  wrap.innerHTML = '<div style="padding:0 16px;font-weight:700;margin:10px 0;">เหลือ ' + items.length + ' คนที่ยังไม่ลงตัว</div>' +
-    items.map(it => (
-      '<div class="card" style="margin:10px 16px;' + (it.severity === 'CRITICAL' ? 'border-color:var(--color-error);' : '') + '">' +
-      '<div style="font-weight:700;">' + (it.severity === 'CRITICAL' ? ic('alert-octagon', 'icon-error') : ic('alert-triangle', 'icon-amber')) + ' ' + it.name + ' · ' + it.class + '</div>' +
-      '<div class="progress">' + it.hint + '</div>' +
-      (it.planned_bus && it.planned_bus.teacher ? '<div class="progress">ครูประจำรถ: ' + it.planned_bus.teacher + (it.planned_bus.teacher_phone ? ' · <a href="tel:' + it.planned_bus.teacher_phone + '">' + it.planned_bus.teacher_phone + '</a>' : '') + '</div>' : '') +
-      (it.guardian && it.guardian.name ? '<div class="progress">ผู้ปกครอง: ' + it.guardian.name + (it.guardian.phone ? ' · <a href="tel:' + it.guardian.phone + '">' + it.guardian.phone + '</a>' : '') + '</div>' : '') +
-      (canResolve
-        ? '<div class="chip-group" style="margin-top:8px;">' +
-        it.suggestedReasons.filter(rc => REASON_STATUS_MAP_[rc]).map(rc =>
-          '<div class="chip" data-resolve="' + it.student_id + '" data-reason="' + rc + '" data-status="' + REASON_STATUS_MAP_[rc] + '" data-direction="' + it.direction + '">' + (REASON_LABELS_[rc] || rc) + '</div>'
-        ).join('') +
-        '</div>'
-        : '') +
-      '</div>'
-    )).join('');
-
-  wrap.querySelectorAll('[data-resolve]').forEach(chip => chip.addEventListener('click', guardClick_(async (e) => {
-    const studentId = e.currentTarget.dataset.resolve;
-    const reasonCode = e.currentTarget.dataset.reason;
-    const status = e.currentTarget.dataset.status;
-    const direction = e.currentTarget.dataset.direction;
-    const r = await api('day.resolve', { date: date, direction: direction, items: [{ studentId: studentId, status: status, reasonCode: reasonCode }] });
-    if (!r.ok) { toast(r.error.message); return; }
-    toast('บันทึกแล้ว');
-    loadReconcile_();
-    loadDaySummary_();
-  })));
 }
 
 // ---------------------------------------------------------------------------
@@ -1977,7 +1914,10 @@ function showManageBlockersUI_(blockers) {
   div.className = 'blocker-list';
   div.innerHTML = '<p style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ปิดรอบไม่ได้ — ยังมี ' + blockers.length + ' คนที่ยังไม่ระบุสถานะ</p>' +
     blockers.map(b => (
-      '<div class="roster-row"><div class="name">' + b.name + '</div></div>' +
+      '<div class="roster-row"><div class="name">' + b.name +
+      (b.phone ? ' · <a href="tel:' + b.phone + '">' + b.phone + '</a>' : '') +
+      (b.guardian_phone ? ' · ผู้ปกครอง' + (b.guardian_name ? ' ' + b.guardian_name : '') + ' <a href="tel:' + b.guardian_phone + '">' + b.guardian_phone + '</a>' : '') +
+      '</div></div>' +
       '<div class="chip-group" style="margin:0 0 10px;">' +
       '<div class="chip" data-manage="ABSENT" data-student="' + b.student_id + '">ขาด</div>' +
       '<div class="chip" data-manage="EXCUSED" data-student="' + b.student_id + '">ผู้ปกครองรับเอง</div>' +
