@@ -1369,7 +1369,7 @@ function renderDaySummary_(rounds) {
   if (!rounds.length) { wrap.innerHTML = '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>'; return; }
 
   const groups = groupRoundsForDisplay_(rounds).slice()
-    .sort((a, b) => String(a.scheduled_at || '').localeCompare(String(b.scheduled_at || '')));
+    .sort((a, b) => String(b.scheduled_at || '').localeCompare(String(a.scheduled_at || ''))); // ใหม่ไปเก่า
   wrap.innerHTML = groups.map((g, idx) => renderSessionCard_(g, idx)).join('');
   wireSessionCards_(groups);
 }
