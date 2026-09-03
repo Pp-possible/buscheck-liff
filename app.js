@@ -1325,7 +1325,8 @@ onClickGuarded_('btn-s16-checker-run', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// S-07 สรุปยอดวัน + หน้ากระทบยอด "ใครหาย เพราะอะไร"
+// S-07 สรุปยอดวัน — วิเคราะห์จากข้อมูลดิบ (day.analysis: ประมวลผลข้ามทุกรอบเช็คของวันนี้ต่อนักเรียน
+// แต่ละคนฝั่ง server) ไม่ใช่เอารายการ "รอบเช็ค" มาแปะซ้ำเหมือนหน้า S-02 — ดูรอบเช็ครายตัวให้ไปที่ S-02/S-14
 // ---------------------------------------------------------------------------
 
 document.getElementById('btn-refresh-daysummary').addEventListener('click', () => loadDaySummary_());
@@ -1334,128 +1335,91 @@ function initDaySummaryScreen_() {
   loadDaySummary_();
 }
 
-// สถานะรวมของ "รอบเช็ค" หนึ่งกลุ่ม (ทุกคันรถของชื่อรอบ+ประเภท+เวลาเดียวกัน) แสดงเป็น badge เดียว —
-// ไม่มีแนวคิดเช้า/บ่ายเข้ามาเกี่ยวข้องเลย ยึดตามเวลาจริงที่ตั้งไว้ (scheduled_at) ของแต่ละรอบเท่านั้น
-function sessionStatusMeta_(status) {
-  if (status === 'CLOSED') return { label: 'เสร็จแล้ว', cls: 'badge-closed', icon: ic('check-circle') };
-  if (status === 'OPEN') return { label: 'กำลังดำเนินการ', cls: 'badge-open', icon: ic('refresh') };
-  return { label: 'รอเปิด', cls: 'badge-none', icon: ic('clock') };
-}
-
-// ลำดับกลุ่ม "รอบเช็ค" ของวันนี้ เรียงตามเวลาจริงจากรอบแรกไปหลัง (อ่านเป็นลำดับเหตุการณ์ของวันนี้
-// ไม่ใช่ "ล่าสุดก่อน" แบบ S-02) — ใช้ทั้งตอน render และตอน handler เจาะดูรายละเอียด ต้องได้ลำดับเดียวกันเป๊ะ
-// เพราะการ์ด "ดูคนที่ยังไม่เช็ค" อ้างอิงกลุ่มด้วย index ในลำดับนี้
-function getSortedDashboardGroups_() {
-  return groupRoundsForDisplay_(state.activeRoundsRaw || []).slice()
-    .sort((a, b) => String(a.scheduled_at || '').localeCompare(String(b.scheduled_at || '')));
-}
-
-// แถบสรุปภาพรวมทั้งวัน — ให้เห็นภาพรวมทั้งหมดในแวบเดียว (จำนวนรอบ/สถานะ/ยอดรวม) แยกจากรายการ
-// การ์ดรอบเช็คแต่ละใบด้านล่าง ไม่ให้หน้านี้ดูเหมือนเอา "รอบของฉัน" มาแปะซ้ำเฉยๆ
-function renderDashboardOverview_(groups) {
-  const openCount = groups.filter(g => aggregateGroupStatus_(g) === 'OPEN').length;
-  const closedCount = groups.filter(g => aggregateGroupStatus_(g) === 'CLOSED').length;
-  const pendingCount = groups.length - openCount - closedCount;
-  const checked = groups.reduce((s, g) => s + g.rounds.reduce((s2, r) => s2 + (r.checked || 0), 0), 0);
-  const expected = groups.reduce((s, g) => s + g.rounds.reduce((s2, r) => s2 + (r.expected || 0), 0), 0);
-  const pct = expected ? Math.round((checked / expected) * 100) : 0;
+// ภาพรวมวันนี้ — ตัวเลขทั้งหมดมาจาก day.analysis (server) ล้วน ๆ ไม่คำนวณเองฝั่ง client (17.12 N6)
+function renderAnalysisOverview_(totals) {
+  const pct = totals.expectedSum ? Math.round((totals.checkedSum / totals.expectedSum) * 100) : 0;
   return '<div class="card" style="margin:12px 16px;">' +
     '<div class="card-title">ภาพรวมวันนี้</div>' +
     '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
-      '<div class="count-box"><div class="num">' + groups.length + '</div><div class="label">รอบเช็ค</div></div>' +
-      '<div class="count-box"><div class="num">' + openCount + '</div><div class="label">กำลังดำเนินการ</div></div>' +
-      '<div class="count-box"><div class="num">' + closedCount + '</div><div class="label">เสร็จแล้ว</div></div>' +
-      '<div class="count-box"><div class="num">' + pendingCount + '</div><div class="label">รอเปิด</div></div>' +
+      '<div class="count-box"><div class="num">' + totals.studentsFullyChecked + '</div><div class="label">เช็คครบแล้ว</div></div>' +
+      '<div class="count-box"><div class="num">' + totals.studentsPartial + '</div><div class="label">เช็คไม่ครบ</div></div>' +
+      '<div class="count-box"><div class="num">' + totals.studentsNotChecked + '</div><div class="label">ยังไม่เช็คเลย</div></div>' +
     '</div>' +
     '<div class="progress-bar"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
-    '<div class="progress" style="margin-top:6px;">เช็คแล้ว ' + checked + '/' + expected + ' คน (' + pct + '%) รวมทั้งวัน</div>' +
-    '</div>';
-}
-
-// การ์ด dashboard ของ "รอบเช็ค" หนึ่งกลุ่ม — โชว์ทั้งตัวเลขจริง (checked/expected) และ progress bar
-// เสมอคู่กัน (ไม่ใช้สีสื่อสถานะเพียงอย่างเดียว) กดแล้วเจาะดูรายคันรถได้ที่หน้าเดียวกับ S-02/S-14
-// ถ้ายังเช็คไม่ครบ มีลิงก์ดูรายชื่อคนที่ยังไม่เช็ค (รวมทุกคันรถในกลุ่มนี้) แทรกไว้ในการ์ดเลย
-function renderSessionDashboardCard_(group, idx) {
-  const typeLabel = ROUND_TYPE_LABELS_[group.round_type] || group.round_type;
-  const status = aggregateGroupStatus_(group);
-  const meta = sessionStatusMeta_(status);
-  const checked = group.rounds.reduce((s, r) => s + (r.checked || 0), 0);
-  const expected = group.rounds.reduce((s, r) => s + (r.expected || 0), 0);
-  const pct = expected ? Math.round((checked / expected) * 100) : 0;
-  const missing = expected - checked;
-  return '<div class="round-item">' +
-    '<div class="round-item-content" data-open-group="' + group.key + '">' +
-      '<div class="row1"><span class="status-badge ' + meta.cls + '">' + meta.icon + ' ' + meta.label + '</span> ' + formatThaiDateTime_(group.scheduled_at) + '</div>' +
-      '<div class="progress">' + typeLabel + ' · ' + group.round_name + ' · ' + group.rounds.length + ' คัน</div>' +
-      '<div class="progress-bar" style="margin:6px 0 4px;"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
-      '<div class="progress">' + checked + '/' + expected + ' คน (' + pct + '%)</div>' +
-      '<div class="drill-hint">ดูรายคันรถ →</div>' +
-    '</div>' +
-    (missing > 0
-      ? '<div class="drill-hint" data-toggle-missing="' + idx + '" style="cursor:pointer;text-align:left;padding:0 14px 12px;background:var(--card-bg);">' + ic('alert-octagon') + ' ยังไม่เช็ค ' + missing + ' คน — ดูรายชื่อ →</div>' +
-        '<div id="missing-' + idx + '" style="display:none;padding:0 14px 12px;background:var(--card-bg);"></div>'
+    '<div class="progress" style="margin-top:6px;">เช็คแล้ว ' + totals.checkedSum + '/' + totals.expectedSum + ' ครั้ง (' + pct + '%) จาก ' +
+      totals.roundsTotal + ' รอบเช็ควันนี้ (' + totals.roundsOpen + ' กำลังดำเนินการ · ' + totals.roundsClosed + ' เสร็จแล้ว · ' + totals.roundsPlanned + ' รอเปิด)</div>' +
+    (totals.duplicateTotal > 0
+      ? '<div class="progress" style="margin-top:2px;">' + ic('alert-triangle', 'icon-amber') + ' สแกนซ้ำที่ถูกปฏิเสธไป ' + totals.duplicateTotal + ' ครั้งวันนี้</div>'
       : '') +
     '</div>';
 }
 
-// dashboard หลักของหน้านี้ — เอารอบของ "ทั้งวัน" (เช้า+บ่ายรวมกัน จาก backend สองก้อน) มาจัดกลุ่มเป็นรอบเช็ค
-function renderSessionDashboard_(amRounds, pmRounds) {
-  const rounds = (amRounds || []).concat(pmRounds || []);
-  if (!rounds.length) return '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>';
-  state.roundsById = state.roundsById || {};
-  rounds.forEach(r => { state.roundsById[r.round_id] = r; });
-  state.activeRoundsRaw = rounds;
-
-  const groups = getSortedDashboardGroups_();
-  return renderDashboardOverview_(groups) + groups.map(renderSessionDashboardCard_).join('');
+// รายชื่อคนที่ยังเช็คไม่ครบวันนี้ — ประมวลข้ามทุกรอบแล้วจาก server เรียงขาดเยอะสุดก่อน แตะแถวเพื่อดู
+// ประวัติของคนนั้นต่อที่ S-16 ได้เลย มีเบอร์ผู้ปกครองให้กดโทรตรง ไม่ต้องไปงมหาทีละรอบ
+function renderMissingStudentsSection_(missingStudents) {
+  if (!missingStudents.length) {
+    return '<div class="card" style="margin:12px 16px;"><div class="row1" style="font-weight:700;">' + ic('check-circle', 'icon-ok') + ' เช็คครบทุกคนแล้ว</div></div>';
+  }
+  return '<div class="card" style="margin:12px 16px;">' +
+    '<div class="card-title">' + ic('alert-octagon') + ' ยังเช็คไม่ครบ (' + missingStudents.length + ' คน)</div>' +
+    missingStudents.map(m => (
+      '<div class="roster-row" data-missing-student="' + m.student_id + '" data-name="' + m.name + '" style="cursor:pointer;">' +
+        '<div><div class="name">' + m.name + (m.class ? ' · ' + m.class : '') + '</div>' +
+        '<div class="meta">' + (m.bus_code ? m.bus_code + ' · ' : '') + m.checked + '/' + m.expected + ' รอบ' +
+        (m.missingRounds.length ? ' · ขาด ' + m.missingRounds.join(', ') : '') +
+        (m.guardian_phone ? ' · <a href="tel:' + m.guardian_phone + '" onclick="event.stopPropagation()">โทรผู้ปกครอง</a>' : '') +
+        '</div></div>' +
+      '</div>'
+    )).join('') +
+    '</div>';
 }
 
-function wireSessionDashboardCards_() {
-  document.querySelectorAll('#s07-summary [data-open-group]').forEach(el => el.addEventListener('click', () => {
-    const groups = getSortedDashboardGroups_();
-    const group = groups.find(g => g.key === el.dataset.openGroup);
-    if (group) navigateToSession_(group, false, 'S-07');
-  }));
+// เทียบเป็นรายคันรถ — คันไหนยังตามหลังเพื่อนอยู่เห็นชัด ๆ เรียงจากเปอร์เซ็นต์น้อยสุดก่อน
+function renderBusBreakdownSection_(busBreakdown) {
+  if (!busBreakdown.length) return '';
+  return '<div class="card" style="margin:12px 16px;">' +
+    '<div class="card-title">เช็คตามคันรถ</div>' +
+    busBreakdown.map(b => {
+      const pct = Math.round((b.checked / b.expected) * 100);
+      return '<div style="margin-bottom:10px;">' +
+        '<div class="row1" style="font-weight:600;">' + (b.bus_name && b.bus_name !== b.bus_code ? b.bus_code + ' · ' + b.bus_name : b.bus_code) + '</div>' +
+        '<div class="progress-bar" style="margin:4px 0;"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="progress">' + b.checked + '/' + b.expected + ' (' + pct + '%)</div>' +
+        '</div>';
+    }).join('') +
+    '</div>';
+}
 
-  // ดูคนที่ยังไม่เช็คของรอบเช็คกลุ่มนี้ (รวมทุกคันรถ) — ดึง round.checks ของทุกรอบในกลุ่มมารวมกัน
-  // เอาเฉพาะคนที่ยังไม่มีผลเช็ค (result เป็น null) มาโชว์พร้อมชื่อรถที่ควรขึ้น
-  document.querySelectorAll('#s07-summary [data-toggle-missing]').forEach(el => el.addEventListener('click', guardClick_(async (e) => {
-    const idx = e.currentTarget.dataset.toggleMissing;
-    const container = document.getElementById('missing-' + idx);
-    if (!container) return;
-    if (container.style.display === 'block') { container.style.display = 'none'; return; }
-    const groups = getSortedDashboardGroups_();
-    const group = groups[idx];
-    if (!group) return;
-    container.style.display = 'block';
-    container.innerHTML = '<div class="spinner"></div>';
-    const results = await Promise.all(group.rounds.map(r => api('round.checks', { roundId: r.round_id })));
-    const missingItems = [];
-    results.forEach((r, i) => {
-      if (!r.ok) return;
-      const busLabel = (state.busMap && state.busMap[group.rounds[i].scope_id]) || group.rounds[i].scope_id || '';
-      r.data.items.filter(it => !it.result).forEach(it => missingItems.push({ name: it.name, bus: busLabel }));
-    });
-    container.innerHTML = missingItems.length
-      ? missingItems.map(m => '<div class="roster-row"><div class="name">' + m.name + '</div><span class="status-pill">' + m.bus + '</span></div>').join('')
-      : '<div class="empty-state">เช็คครบทุกคนแล้ว</div>';
-  })));
+// สิ่งที่ควรตรวจสอบ — ความผิดปกติที่ประมวลผลได้จริง ไม่ใช่ noise: ไม่มีอะไรผิดปกติก็ไม่แสดง section นี้เลย
+function renderAnomaliesSection_(anomalies) {
+  const items = [];
+  (anomalies.incompleteClosedRounds || []).forEach(r => items.push(
+    ic('alert-triangle', 'icon-amber') + ' ปิดรอบ "' + r.round_name + '" ไปทั้งที่เช็คได้แค่ ' + r.checked + '/' + r.expected + ' คน'
+  ));
+  (anomalies.stillOpenTooLong || []).forEach(r => items.push(
+    ic('alert-triangle', 'icon-amber') + ' รอบ "' + r.round_name + '" เปิดค้างมา ' + r.minutesOpen + ' นาทีแล้ว'
+  ));
+  if (!items.length) return '';
+  return '<div class="card" style="margin:12px 16px;">' +
+    '<div class="card-title">สิ่งที่ควรตรวจสอบ</div>' +
+    items.map(t => '<div class="progress" style="margin-bottom:4px;">' + t + '</div>').join('') +
+    '</div>';
 }
 
 async function loadDaySummary_() {
   const wrap = document.getElementById('s07-summary');
   wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
   setSyncBadge_('s07-sync', 'loading');
-  const [amR, pmR] = await Promise.all([
-    api('day.summary', { direction: 'AM' }), api('day.summary', { direction: 'PM' }), ensureBusMap_()
+  const [analysisR, amR, pmR] = await Promise.all([
+    api('day.analysis', {}), api('day.summary', { direction: 'AM' }), api('day.summary', { direction: 'PM' })
   ]);
-  if (!amR.ok || !pmR.ok) {
-    wrap.innerHTML = '<div class="empty-state">' + ((!amR.ok && amR.error.message) || (!pmR.ok && pmR.error.message)) + '</div>';
+  if (!analysisR.ok) {
+    wrap.innerHTML = '<div class="empty-state">' + analysisR.error.message + '</div>';
     setSyncBadge_('s07-sync', 'error');
     return;
   }
   setSyncBadge_('s07-sync', 'fresh', Date.now());
-  renderDaySummary_(amR.data, pmR.data);
+  renderDaySummary_(analysisR.data, amR.ok ? amR.data : null, pmR.ok ? pmR.data : null);
 }
 
 // สถานะปิดยอดของวันนี้ "ก้อนเดียว" ไม่แยกเช้า/บ่ายให้ผู้ใช้ต้องเลือก — ข้างในยังเรียก day.close
@@ -1464,6 +1428,7 @@ async function loadDaySummary_() {
 // วันนั้นปิดครบแล้ว" เท่านั้น (canClose/blockers มาจาก backend ตรง ๆ ไม่คำนวณ unaccounted เองอีกแล้ว
 // เพราะแต่ละรอบเป็นอิสระต่อกัน ไม่ต้องรอ "ขึ้นรถ" คู่กับ "ลงรถ" ให้ครบถึงจะปิดยอดได้)
 function renderCloseStatus_(am, pm) {
+  if (!am || !pm) return '';
   const canClose = state.permissions.indexOf('day.close') !== -1;
   const directions = [am, pm].filter(d => d.totals.expected > 0 || d.status === 'CLOSED');
   if (!directions.length) return '';
@@ -1474,7 +1439,7 @@ function renderCloseStatus_(am, pm) {
 
   const pending = directions.filter(d => d.status !== 'CLOSED');
   const totalBlocked = pending.reduce((s, d) => s + (d.blockers || []).reduce((s2, b) => s2 + b.count, 0), 0);
-  // ยังปิดไม่ได้ — ไม่ต้องเตือนซ้ำตรงนี้ เพราะการ์ดรอบเช็คแต่ละใบด้านบนก็เห็นอยู่แล้วว่าใบไหนยังไม่ปิด
+  // ยังปิดไม่ได้ — ไม่ต้องเตือนซ้ำตรงนี้ เพราะรายชื่อคนที่ยังเช็คไม่ครบด้านบนก็เห็นอยู่แล้วว่าเหลืออะไรบ้าง
   if (totalBlocked > 0) return '';
   if (canClose) {
     return '<div class="card" style="margin:12px 16px;">' +
@@ -1485,12 +1450,22 @@ function renderCloseStatus_(am, pm) {
   return '<div class="empty-state">ยอดครบแล้ว รอผู้ดูแลกดปิดยอด</div>';
 }
 
-function renderDaySummary_(am, pm) {
+function renderDaySummary_(analysis, am, pm) {
   document.getElementById('s07-summary').innerHTML =
-    renderSessionDashboard_(am.rounds, pm.rounds) +
+    renderAnalysisOverview_(analysis.totals) +
+    renderMissingStudentsSection_(analysis.missingStudents) +
+    renderBusBreakdownSection_(analysis.busBreakdown) +
+    renderAnomaliesSection_(analysis.anomalies) +
     renderCloseStatus_(am, pm);
 
-  wireSessionDashboardCards_();
+  // แตะรายชื่อคนที่ยังไม่เช็ค → เด้งไปดูประวัติวันนี้ของคนนั้นต่อที่ S-16 ทันที ไม่ต้องพิมพ์ค้นหาเอง
+  document.querySelectorAll('#s07-summary [data-missing-student]').forEach(el => el.addEventListener('click', () => {
+    const studentId = el.dataset.missingStudent;
+    showScreen('S-16');
+    initReportScreen_();
+    document.getElementById('s16-student-search').value = el.dataset.name;
+    loadStudentTimeline_(studentId);
+  }));
 
   const closeBtn = document.getElementById('btn-day-close');
   if (closeBtn) closeBtn.addEventListener('click', guardClick_(async () => {
