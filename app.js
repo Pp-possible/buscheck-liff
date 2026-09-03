@@ -800,6 +800,9 @@ function renderSessionBusCards_(rounds, opts) {
   // หัวหน้าสาย (SUPERVISOR) ลงมาทำซ้ำรอบไม่ได้เหมือนกัน เพราะ "ทำซ้ำ" คือสร้างรอบใหม่ (round.create)
   const canCreateRound = !!(state.profile && state.profile.level >= 80);
 
+  const canClose = state.permissions && state.permissions.indexOf('round.close') !== -1;
+  const canCloseTrip = state.permissions && state.permissions.indexOf('trip.close') !== -1;
+
   list.innerHTML = rounds.map(round => {
     const statusClass = round.status === 'OPEN' ? 'open' : (round.status === 'CLOSED' ? 'closed' : '');
     const statusLabel = round.status === 'OPEN' ? 'เปิดอยู่' : round.status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
@@ -831,13 +834,20 @@ function renderSessionBusCards_(rounds, opts) {
       (isPlanned && !archivedList && isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
       (isPlanned && !archivedList && !isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-wait-open="1">รอเปิด</button>' : '') +
       (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
+      (round.status === 'OPEN' && canClose ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-round="' + round.round_id + '">ปิดรอบ</button>' : '') +
       (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
+      (isClosed && canCloseTrip && round.trip_id ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-trip="' + round.trip_id + '">ปิดเที่ยวรถ</button>' : '') +
       ((isPlanned || round.status === 'OPEN') && canEdit ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
       (canManage && canCreateRound && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-duplicate="' + round.round_id + '">ทำซ้ำ</button>' : '') +
       (canManage && archivedList ? '<button class="btn btn-danger" style="margin-top:8px" data-delete-permanent="' + round.round_id + '">ลบถาวร</button>' : '') +
+      '<div class="blocker-list" id="blockers-' + round.round_id + '"></div>' +
       '</div></div>';
     return html;
   }).join('');
+
+  // ปุ่ม "+ เพิ่มรถเข้ารอบนี้" — เฉพาะหน้ารอบเช็ควันนี้ (ไม่ใช่ประวัติ) และต้องมีสิทธิ์สร้างรอบ (ADMIN ขึ้นไป)
+  const addBusBtn = document.getElementById('btn-add-bus-to-session');
+  if (addBusBtn) addBusBtn.style.display = (canManage && canCreateRound && !archivedList) ? '' : 'none';
 
   const afterChange = async () => {
     if (archivedList) await loadRoundHistory_({ silent: true }); else await loadRounds_({ silent: true });
@@ -890,6 +900,33 @@ function renderSessionBusCards_(rounds, opts) {
     const r = await api('round.reopen', { roundId });
     if (!r.ok) { toast(r.error.message); return; }
     toast('เปิดรอบอีกครั้งแล้ว');
+    await afterChange();
+  })));
+
+  // ปิดรอบ — ย้ายมาจากหน้า S-05 เดิม (ตอนนี้ปิดตรงจากการ์ดในหน้านี้เลย) ถ้าเช็คไม่ครบ (E_ROUND_INCOMPLETE)
+  // แสดงรายชื่อคนที่ยังไม่ระบุสถานะ + เบอร์โทรตรงในการ์ดนั้นให้จัดการต่อได้เลย
+  list.querySelectorAll('[data-close-round]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const roundId = e.currentTarget.dataset.closeRound;
+    const r = await api('round.close', { roundId });
+    if (!r.ok) {
+      if (r.error.code === 'E_ROUND_INCOMPLETE' && r.error.details) {
+        const direction = state.roundsById[roundId] && state.roundsById[roundId].direction;
+        showManageBlockersUI_(r.error.details.blockers, 'blockers-' + roundId, direction);
+        return;
+      }
+      toast(r.error.message);
+      return;
+    }
+    toast('ปิดรอบแล้ว');
+    await afterChange();
+  })));
+
+  // ปิดเที่ยวรถ — ย้ายมาจาก S-05 เดิมเหมือนกัน ใช้ trip_id ที่ติดมากับรอบนี้โดยตรง ไม่ต้อง round.get ซ้ำ
+  list.querySelectorAll('[data-close-trip]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const tripId = e.currentTarget.dataset.closeTrip;
+    const r = await api('trip.close', { tripId });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('ปิดเที่ยวรถแล้ว');
     await afterChange();
   })));
 
@@ -1705,9 +1742,10 @@ function showCreateRoundStep_(step) {
   document.getElementById('cr-step1').style.display = step === 1 ? 'block' : 'none';
   document.getElementById('cr-step2').style.display = step === 2 ? 'block' : 'none';
   document.getElementById('dlg-create-round-cancel').style.display = step === 1 ? 'inline-flex' : 'none';
-  document.getElementById('dlg-create-round-back').style.display = step === 2 ? 'inline-flex' : 'none';
+  // โหมดเพิ่มรถเข้ารอบเดิม (addToSession) ล็อกชื่อ/ประเภท/เวลาไว้ — ไม่ให้ย้อนกลับไปแก้ ป้องกันสร้างรอบใหม่ผิดกลุ่มโดยไม่ตั้งใจ
+  document.getElementById('dlg-create-round-back').style.display = (step === 2 && state.crMode !== 'addToSession') ? 'inline-flex' : 'none';
   const submitBtn = document.getElementById('dlg-create-round-submit');
-  submitBtn.textContent = state.crMode === 'edit' ? 'บันทึก' : (step === 1 ? 'ถัดไป' : 'สร้างรอบ');
+  submitBtn.textContent = state.crMode === 'edit' ? 'บันทึก' : state.crMode === 'addToSession' ? 'เพิ่มรถ' : (step === 1 ? 'ถัดไป' : 'สร้างรอบ');
 }
 
 // existingRound: ไม่ใส่ = สร้างใหม่, ใส่ + duplicate=false = แก้ไขรอบเดิม, ใส่ + duplicate=true = ทำซ้ำเป็นรอบใหม่
@@ -1748,6 +1786,47 @@ async function openCreateRoundDialog_(existingRound, duplicate) {
     busMulti.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => c.classList.toggle('selected')));
   }
 }
+
+// เพิ่มรถเข้ารอบ session ที่มีอยู่แล้ว (ชื่อ/ประเภท/เวลาเดียวกัน) — ล็อกค่าจาก state.currentSession ไว้
+// ข้ามไปขั้นเลือกรถ (step 2) ตรง ๆ และตัดรถที่อยู่ในรอบนี้แล้วออกจากตัวเลือก
+async function openAddBusToSessionDialog_() {
+  const s = state.currentSession;
+  if (!s) return;
+  state.crMode = 'addToSession';
+
+  document.getElementById('dlg-create-round-title').textContent = 'เพิ่มรถเข้ารอบนี้';
+  document.getElementById('cr-round-id').value = '';
+  document.getElementById('cr-name').value = s.round_name;
+  document.getElementById('cr-type').value = s.round_type;
+  document.getElementById('cr-scheduled-at').value = s.scheduled_at ? s.scheduled_at.slice(0, 16) : nowForDatetimeLocal_();
+  document.getElementById('cr-require-all').checked = true;
+  document.getElementById('cr-edit-bus-field').style.display = 'none';
+  document.getElementById('dlg-create-round').classList.add('show');
+  showCreateRoundStep_(2);
+
+  const busMulti = document.getElementById('cr-bus-multi');
+  busMulti.innerHTML = '<div class="empty-state" style="padding:10px;">กำลังโหลด...</div>';
+
+  const r = await api('me.buses', {});
+  if (!r.ok) { toast('โหลดรายการรถไม่ได้: ' + r.error.message); busMulti.innerHTML = ''; return; }
+  const buses = r.data || [];
+  state.busMap = state.busMap || {};
+  buses.forEach(b => { state.busMap[b.bus_id] = b.bus_name || b.bus_code; });
+
+  const usedBusIds = new Set(
+    (state.activeRoundsRaw || [])
+      .filter(rd => rd.round_name === s.round_name && rd.round_type === s.round_type && rd.scheduled_at === s.scheduled_at)
+      .map(rd => rd.scope_id)
+  );
+  const available = buses.filter(b => !usedBusIds.has(b.bus_id));
+
+  busMulti.innerHTML = available.map(b =>
+    '<div class="chip" data-bus="' + b.bus_id + '">' + b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</div>'
+  ).join('') || '<div class="empty-state">ทุกคันอยู่ในรอบนี้แล้ว</div>';
+  busMulti.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => c.classList.toggle('selected')));
+}
+
+document.getElementById('btn-add-bus-to-session').addEventListener('click', () => openAddBusToSessionDialog_());
 
 // เตือนถ้ามีรอบชื่อ+ประเภท+เวลาเดียวกันอยู่แล้ว กันตั้งรอบซ้ำเวลาเดียวกันหลายครั้งโดยไม่ตั้งใจ — เป็นแค่คำเตือน
 // ไม่บล็อกเด็ดขาด เผื่อบางครั้งตั้งใจสร้างซ้ำจริง ๆ (เช่น เที่ยวเสริม) ให้ยืนยันอีกทีก่อนเท่านั้น
@@ -1803,7 +1882,9 @@ onClickGuarded_('dlg-create-round-submit', async () => {
   document.getElementById('cr-name').value = '';
   if (failed.length) toast('สร้างสำเร็จ ' + created + ' คัน — ผิดพลาด: ' + failed.join(', '));
   else toast('สร้างรอบให้ ' + created + ' คันแล้ว');
-  loadRounds_({ silent: true });
+  await loadRounds_({ silent: true });
+  // ถ้ากำลังดูรายละเอียด session อยู่ (S-14) — รีเฟรชการ์ดในหน้านั้นด้วยเลย เพื่อให้เห็นรถที่เพิ่งเพิ่มทันที
+  if (state.currentSession) renderSessionDetail_();
 });
 
 // ---------------------------------------------------------------------------
@@ -2010,7 +2091,6 @@ async function switchScanMode_(type) {
 }
 
 document.getElementById('btn-goto-s04').addEventListener('click', () => { showScreen('S-04'); loadRoster_(); });
-document.getElementById('btn-goto-s05').addEventListener('click', () => { showScreen('S-05'); loadCloseScreen_(); });
 
 // ---------------------------------------------------------------------------
 // S-04 รายชื่อ
@@ -2074,58 +2154,13 @@ function renderRosterList_() {
 }
 
 // ---------------------------------------------------------------------------
-// S-05 ปิดรอบ / ปิดเที่ยวรถ
+// ปิดรอบไม่ครบ — แสดงรายชื่อคนที่ยังไม่ระบุสถานะตรงในการ์ดรอบนั้น (เรียกจาก S-14)
 // ---------------------------------------------------------------------------
 
-function renderCloseSummary_(round) {
-  document.getElementById('s05-round-summary').textContent = round.checked + '/' + round.expected + ' คน · เช็คซ้ำ ' + round.duplicateAttempts + ' ครั้ง';
-}
-
-async function loadCloseScreen_() {
-  const cacheKey = 'close_' + state.currentRoundId;
-  const cached = cacheGet_(cacheKey);
-  if (cached) {
-    renderCloseSummary_(cached.data);
-    setSyncBadge_('s05-sync', 'cache', cached.cachedAt);
-  }
-  setSyncBadge_('s05-sync', 'loading');
-  spinRefreshBtn_('btn-refresh-close', true);
-
-  const rr = await api('round.get', { roundId: state.currentRoundId });
-  spinRefreshBtn_('btn-refresh-close', false);
-  if (!rr.ok) {
-    if (!cached) toast(rr.error.message);
-    setSyncBadge_('s05-sync', 'error');
-    return;
-  }
-
-  cacheSet_(cacheKey, rr.data);
-  renderCloseSummary_(rr.data);
-  setSyncBadge_('s05-sync', 'fresh', Date.now());
-}
-
-document.getElementById('btn-refresh-close').addEventListener('click', loadCloseScreen_);
-
-onClickGuarded_('btn-close-round', async () => {
-  const r = await api('round.close', { roundId: state.currentRoundId });
-  if (!r.ok) {
-    if (r.error.code === 'E_ROUND_INCOMPLETE' && r.error.details) {
-      showManageBlockersUI_(r.error.details.blockers);
-      return;
-    }
-    toast(r.error.message);
-    return;
-  }
-  toast('ปิดรอบแล้ว');
-  showScreen('S-02'); loadRounds_();
-});
-
-function showManageBlockersUI_(blockers) {
-  const wrap = document.getElementById('s05-round-card');
-  const existing = wrap.querySelector('.blocker-list'); if (existing) existing.remove();
-  const div = document.createElement('div');
-  div.className = 'blocker-list';
-  div.innerHTML = '<p style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ปิดรอบไม่ได้ — ยังมี ' + blockers.length + ' คนที่ยังไม่ระบุสถานะ</p>' +
+function showManageBlockersUI_(blockers, containerId, direction) {
+  const wrap = document.getElementById(containerId);
+  if (!wrap) return;
+  wrap.innerHTML = '<p style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ปิดรอบไม่ได้ — ยังมี ' + blockers.length + ' คนที่ยังไม่ระบุสถานะ</p>' +
     blockers.map(b => (
       '<div class="roster-row"><div class="name">' + b.name +
       (b.phone ? ' · <a href="tel:' + b.phone + '">' + b.phone + '</a>' : '') +
@@ -2136,27 +2171,17 @@ function showManageBlockersUI_(blockers) {
       '<div class="chip" data-manage="EXCUSED" data-student="' + b.student_id + '">ผู้ปกครองรับเอง</div>' +
       '<div class="chip" data-manage="UNRESOLVED" data-student="' + b.student_id + '">ยังไม่ทราบ</div></div>'
     )).join('');
-  wrap.appendChild(div);
-  div.querySelectorAll('[data-manage]').forEach(chip => chip.addEventListener('click', guardClick_(async () => {
+  wrap.querySelectorAll('[data-manage]').forEach(chip => chip.addEventListener('click', guardClick_(async () => {
     const status = chip.dataset.manage;
     const reasonCode = status === 'ABSENT' ? 'NO_SHOW' : status === 'EXCUSED' ? 'PARENT_PICKUP' : 'STILL_SEARCHING';
     const r = await api('student.setStatus', {
-      date: new Date().toISOString().slice(0, 10), direction: 'AM', studentId: chip.dataset.student,
+      date: new Date().toISOString().slice(0, 10), direction: direction || 'AM', studentId: chip.dataset.student,
       status: status, reasonCode: reasonCode, clientEventId: uuid()
     });
-    if (r.ok) { chip.closest('.roster-row').nextSibling ? null : null; chip.parentElement.previousElementSibling.remove(); chip.parentElement.remove(); toast('บันทึกแล้ว'); }
+    if (r.ok) { chip.parentElement.previousElementSibling.remove(); chip.parentElement.remove(); toast('บันทึกแล้ว'); }
     else toast(r.error.message);
   })));
 }
-
-onClickGuarded_('btn-close-trip', async () => {
-  const rr = await api('round.get', { roundId: state.currentRoundId });
-  if (!rr.ok) return;
-  const r = await api('trip.close', { tripId: rr.data.trip_id });
-  if (!r.ok) { toast(r.error.message); return; }
-  toast('ปิดเที่ยวรถแล้ว');
-  showScreen('S-01'); renderHome_();
-});
 
 // ---------------------------------------------------------------------------
 // S-19 QR รับรองของฉัน
