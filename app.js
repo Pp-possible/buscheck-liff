@@ -532,7 +532,7 @@ onClickGuarded_('btn-submit-student', async () => {
   if (!r.ok) { toast(r.error.message); return; }
   applySession_({ sessionToken: r.data.sessionToken, persona: 'STUDENT', profile: r.data.student, permissions: [] });
   clearInterval(s00cTimer);
-  document.getElementById('s00d-message').textContent = 'ลงทะเบียนสำเร็จ · ใช้ QR นี้ให้ครูสแกนตอนขึ้น-ลงรถ (QR เปลี่ยนอัตโนมัติทุก 20 วิ)';
+  document.getElementById('s00d-message').textContent = 'ลงทะเบียนสำเร็จ · ใช้ QR นี้ให้ครูสแกนตอนขึ้น-ลงรถ (QR เปลี่ยนอัตโนมัติเป็นระยะ ให้เปิดหน้านี้ค้างไว้ตอนสแกน)';
   document.getElementById('s00d-qr-box').style.display = 'block';
   startStudentQrLoop_(r.data.qrBatch, 's00d-qr-canvas');
   renderStepBar_('s00d-steps', 'S-00d', state.regType);
@@ -2363,7 +2363,8 @@ async function loadStudentHome_(opts) {
   setSyncBadge_('s21-sync', 'fresh', Date.now());
 }
 
-// QR ประจำตัวนักเรียนหมุนทุก ~20 วิ เหมือนของครู (S-19) — วนแสดงจากชุดที่ได้มาในเครื่องเอง ไม่ต้อง
+// QR ประจำตัวนักเรียนหมุนเป็นระยะเหมือนของครู (S-19, ความถี่ตั้งค่าได้ที่ config STUDENT_QR_TTL_SEC)
+// — วนแสดงจากชุดที่ได้มาในเครื่องเอง ไม่ต้อง
 // เรียกเซิร์ฟเวอร์ทุกครั้ง จนกว่าจะใกล้หมดชุด (เหลือน้อยกว่า 1 นาที) ถึงค่อยขอชุดใหม่ผ่าน loadStudentHome_
 // (ใช้ร่วมกัน 2 จอ: S-21 หน้าแรกนักเรียน กับ S-00d จอสรุปหลังลงทะเบียนเสร็จใหม่ ๆ — ระบุ canvasId เอง)
 function startStudentQrLoop_(tokens, canvasId) {
