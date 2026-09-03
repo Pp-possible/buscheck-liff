@@ -585,6 +585,7 @@ function navigateTile_(route) {
   else if (route === 'S-17') { showScreen('S-17'); loadApprovalsList_(); }
   else if (route === 'S-18') { showScreen('S-18'); loadStudentsList_(); }
   else if (route === 'S-13') { showScreen('S-13'); loadAlertsList_(); }
+  else if (route === 'S-06') { showScreen('S-06'); loadHistoryScreen_(); }
 }
 
 async function renderHome_(opts) {
@@ -941,10 +942,10 @@ async function loadRoundHistory_(opts) {
     list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
   }
   setSyncBadge_('s06-sync', 'loading');
-  spinRefreshBtn_('btn-refresh-round-history', true);
+  spinRefreshBtn_('btn-refresh-history', true);
 
   const [r] = await Promise.all([api('round.today', { archived: true }), ensureBusMap_()]);
-  spinRefreshBtn_('btn-refresh-round-history', false);
+  spinRefreshBtn_('btn-refresh-history', false);
   if (!r.ok) {
     if (!cached) list.innerHTML = '<div class="empty-state">' + r.error.message + '</div>';
     setSyncBadge_('s06-sync', 'error');
@@ -956,8 +957,217 @@ async function loadRoundHistory_(opts) {
   setSyncBadge_('s06-sync', 'fresh', Date.now());
 }
 
-document.getElementById('btn-goto-round-history').addEventListener('click', () => { showScreen('S-06'); loadRoundHistory_(); });
-document.getElementById('btn-refresh-round-history').addEventListener('click', () => loadRoundHistory_());
+document.getElementById('btn-goto-round-history').addEventListener('click', () => { showScreen('S-06'); loadHistoryScreen_(); });
+
+// ---------------------------------------------------------------------------
+// S-06 "ประวัติดำเนินการ" (เดิมชื่อ "ประวัติรอบรถ") — SUPER_ADMIN เท่านั้น (server เช็คซ้ำทุก action
+// อยู่แล้วผ่าน assertSuperAdmin_ ฝั่งนี้แค่ไม่แสดงปุ่มให้ role อื่นตั้งแต่ต้น) รวมรายการที่ถูก
+// "เก็บเข้าประวัติ" จากทุกหน้า มาไว้ที่เดียว คืนค่า/ลบถาวรทีละรายการหรือทั้งหมวดได้
+// ---------------------------------------------------------------------------
+
+// ตัวเรนเดอร์กลางใช้ร่วมกันได้ทุกหมวด (รถ/ผู้ใช้/นักเรียน/คิวอนุมัติ/แจ้งเตือน) — รอบเช็คมี UI ของตัวเอง
+// อยู่แล้ว (renderRoundsList_) ไม่ใช้ตัวนี้ cfg = { title(item), subtitle(item), restoreAction,
+// restorePayload(item), deleteAction, deletePayload(item), reload() }
+function renderHistorySection_(listElId, items, cfg) {
+  const list = document.getElementById(listElId);
+  if (!items.length) { list.innerHTML = '<div class="empty-state">ไม่มีรายการ</div>'; return; }
+  list.innerHTML = items.map((item, i) => (
+    '<div class="roster-row" style="flex-direction:column;align-items:stretch;gap:6px;" data-idx="' + i + '">' +
+    '<div><div class="name">' + cfg.title(item) + '</div>' +
+    (cfg.subtitle(item) ? '<div class="meta">' + cfg.subtitle(item) + '</div>' : '') + '</div>' +
+    '<div style="display:flex;gap:8px;">' +
+    '<button class="btn btn-secondary" style="flex:1;min-height:36px;padding:6px 10px;font-size:13px;" data-act="restore" data-idx="' + i + '">คืนค่า</button>' +
+    '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-act="delete" data-idx="' + i + '">ลบถาวร</button>' +
+    '</div></div>'
+  )).join('');
+
+  list.querySelectorAll('[data-act="restore"]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const item = items[Number(e.currentTarget.dataset.idx)];
+    const r = await api(cfg.restoreAction, cfg.restorePayload(item));
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('คืนค่าแล้ว');
+    cfg.reload();
+  })));
+  list.querySelectorAll('[data-act="delete"]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
+    const item = items[Number(e.currentTarget.dataset.idx)];
+    if (!confirm('ลบ "' + cfg.title(item) + '" ถาวร? กู้คืนไม่ได้')) return;
+    const r = await api(cfg.deleteAction, cfg.deletePayload(item));
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('ลบถาวรแล้ว');
+    cfg.reload();
+  })));
+}
+
+async function loadArchivedBuses_() {
+  const r = await api('bus.list', { archived: true });
+  if (!r.ok) { toast(r.error.message); return; }
+  state.archivedBuses = r.data;
+  renderHistorySection_('s06-buses-list', r.data, {
+    title: (b) => b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : ''),
+    subtitle: (b) => b.plate_no || '',
+    restoreAction: 'bus.restore', restorePayload: (b) => ({ busId: b.bus_id }),
+    deleteAction: 'bus.delete', deletePayload: (b) => ({ busId: b.bus_id }),
+    reload: loadArchivedBuses_
+  });
+}
+
+async function loadArchivedUsers_() {
+  const r = await api('user.list', { archived: true });
+  if (!r.ok) { toast(r.error.message); return; }
+  state.archivedUsers = r.data;
+  renderHistorySection_('s06-users-list', r.data, {
+    title: (u) => u.display_name + (u.nickname ? ' (' + u.nickname + ')' : ''),
+    subtitle: (u) => u.role_name || u.role_code,
+    restoreAction: 'user.restore', restorePayload: (u) => ({ userId: u.user_id }),
+    deleteAction: 'user.delete', deletePayload: (u) => ({ userId: u.user_id }),
+    reload: loadArchivedUsers_
+  });
+}
+
+async function loadArchivedStudents_() {
+  const r = await api('student.list', { archived: true });
+  if (!r.ok) { toast(r.error.message); return; }
+  state.archivedStudents = r.data;
+  renderHistorySection_('s06-students-list', r.data, {
+    title: (s) => s.name + (s.nickname ? ' (' + s.nickname + ')' : ''),
+    subtitle: (s) => [s.student_code, s.class].filter(Boolean).join(' · '),
+    restoreAction: 'student.restore', restorePayload: (s) => ({ studentId: s.student_id }),
+    deleteAction: 'student.delete', deletePayload: (s) => ({ studentId: s.student_id }),
+    reload: loadArchivedStudents_
+  });
+}
+
+async function loadArchivedRegs_() {
+  const r = await api('reg.list', { archived: true });
+  if (!r.ok) { toast(r.error.message); return; }
+  state.archivedRegs = r.data;
+  renderHistorySection_('s06-regs-list', r.data, {
+    title: (rr) => rr.full_name + ' (' + (rr.reg_type === 'TEACHER' ? 'ครู' : 'นักเรียน') + ')',
+    subtitle: (rr) => rr.status,
+    restoreAction: 'reg.restore', restorePayload: (rr) => ({ regId: rr.reg_id }),
+    deleteAction: 'reg.delete', deletePayload: (rr) => ({ regId: rr.reg_id }),
+    reload: loadArchivedRegs_
+  });
+}
+
+async function loadArchivedAlerts_() {
+  const r = await api('alert.list', { archived: true });
+  if (!r.ok) { toast(r.error.message); return; }
+  state.archivedAlerts = r.data;
+  renderHistorySection_('s06-alerts-list', r.data, {
+    title: (a) => a.title,
+    subtitle: (a) => a.message,
+    restoreAction: 'alert.restore', restorePayload: (a) => ({ alertId: a.alert_id }),
+    deleteAction: 'alert.delete', deletePayload: (a) => ({ alertId: a.alert_id }),
+    reload: loadArchivedAlerts_
+  });
+}
+
+async function loadHistoryScreen_() {
+  document.getElementById('s06-summary').textContent = '';
+  await Promise.all([
+    loadRoundHistory_(), loadArchivedBuses_(), loadArchivedUsers_(),
+    loadArchivedStudents_(), loadArchivedRegs_(), loadArchivedAlerts_()
+  ]);
+}
+
+document.getElementById('btn-refresh-history').addEventListener('click', () => loadHistoryScreen_());
+
+// "ลบทั้งหมด" ต่อหมวด — ลูปเรียก action เดิมทีละรายการ (แพทเทิร์นเดียวกับปุ่ม "ลบถาวรทั้งกลุ่ม" ของ
+// รอบเช็คที่มีอยู่แล้ว) ข้ามรายการที่ติด E_HAS_HISTORY (มีประวัติเช็คยอดผูกอยู่จริง) แล้วรายงานสรุป
+async function purgeSection_(items, deleteAction, deletePayload) {
+  if (!items.length) return { deleted: 0, skipped: 0 };
+  const results = await Promise.all(items.map((item) => api(deleteAction, deletePayload(item))));
+  const deleted = results.filter((r) => r.ok).length;
+  return { deleted, skipped: results.length - deleted };
+}
+
+document.getElementById('btn-history-delete-all-rounds').addEventListener('click', guardClick_(async () => {
+  const rounds = state.archivedRoundsRaw || [];
+  if (!rounds.length) { toast('ไม่มีรอบเช็คในประวัติ'); return; }
+  if (!confirm('ลบรอบเช็คในประวัติทั้งหมด ' + rounds.length + ' รอบถาวร? กู้คืนไม่ได้')) return;
+  const results = await Promise.all(rounds.map((r) => api('round.delete', { roundId: r.round_id })));
+  const deleted = results.filter((r) => r.ok).length;
+  toast('ลบรอบเช็คแล้ว ' + deleted + '/' + rounds.length + ' รอบ');
+  await loadHistoryScreen_();
+}));
+
+document.getElementById('btn-history-delete-all-buses').addEventListener('click', guardClick_(async () => {
+  const items = state.archivedBuses || [];
+  if (!items.length) { toast('ไม่มีรถในประวัติ'); return; }
+  if (!confirm('ลบรถในประวัติทั้งหมด ' + items.length + ' คันถาวร? กู้คืนไม่ได้')) return;
+  const { deleted, skipped } = await purgeSection_(items, 'bus.delete', (b) => ({ busId: b.bus_id }));
+  toast('ลบสำเร็จ ' + deleted + ' คัน' + (skipped ? ' — ข้าม ' + skipped + ' คัน (ยังมีรอบเช็คผูกอยู่)' : ''));
+  await loadArchivedBuses_();
+}));
+
+document.getElementById('btn-history-delete-all-users').addEventListener('click', guardClick_(async () => {
+  const items = state.archivedUsers || [];
+  if (!items.length) { toast('ไม่มีผู้ใช้ในประวัติ'); return; }
+  if (!confirm('ลบผู้ใช้ในประวัติทั้งหมด ' + items.length + ' คนถาวร? กู้คืนไม่ได้')) return;
+  const { deleted, skipped } = await purgeSection_(items, 'user.delete', (u) => ({ userId: u.user_id }));
+  toast('ลบสำเร็จ ' + deleted + ' คน' + (skipped ? ' — ข้าม ' + skipped + ' คน (ยังมีประวัติเช็คยอดผูกอยู่)' : ''));
+  await loadArchivedUsers_();
+}));
+
+document.getElementById('btn-history-delete-all-students').addEventListener('click', guardClick_(async () => {
+  const items = state.archivedStudents || [];
+  if (!items.length) { toast('ไม่มีนักเรียนในประวัติ'); return; }
+  if (!confirm('ลบนักเรียนในประวัติทั้งหมด ' + items.length + ' คนถาวร? กู้คืนไม่ได้')) return;
+  const { deleted, skipped } = await purgeSection_(items, 'student.delete', (s) => ({ studentId: s.student_id }));
+  toast('ลบสำเร็จ ' + deleted + ' คน' + (skipped ? ' — ข้าม ' + skipped + ' คน (ยังมีประวัติเช็คยอดผูกอยู่)' : ''));
+  await loadArchivedStudents_();
+}));
+
+document.getElementById('btn-history-delete-all-regs').addEventListener('click', guardClick_(async () => {
+  const items = state.archivedRegs || [];
+  if (!items.length) { toast('ไม่มีคำขอในประวัติ'); return; }
+  if (!confirm('ลบคำขอลงทะเบียนในประวัติทั้งหมด ' + items.length + ' รายการถาวร? กู้คืนไม่ได้')) return;
+  const { deleted } = await purgeSection_(items, 'reg.delete', (rr) => ({ regId: rr.reg_id }));
+  toast('ลบสำเร็จ ' + deleted + ' รายการ');
+  await loadArchivedRegs_();
+}));
+
+document.getElementById('btn-history-delete-all-alerts').addEventListener('click', guardClick_(async () => {
+  const items = state.archivedAlerts || [];
+  if (!items.length) { toast('ไม่มีแจ้งเตือนในประวัติ'); return; }
+  if (!confirm('ลบแจ้งเตือนในประวัติทั้งหมด ' + items.length + ' รายการถาวร? กู้คืนไม่ได้')) return;
+  const { deleted } = await purgeSection_(items, 'alert.delete', (a) => ({ alertId: a.alert_id }));
+  toast('ลบสำเร็จ ' + deleted + ' รายการ');
+  await loadArchivedAlerts_();
+}));
+
+// ปุ่มรวม — ลบรอบเช็คก่อนเสมอ (พ่วงลบ roundChecks ไปด้วย) แล้วค่อยลบที่เหลือ เพราะการลบรอบเช็คอาจ
+// ไปปลดล็อกผู้ใช้/นักเรียนที่เคยติด E_HAS_HISTORY จากประวัติเช็คยอดของรอบที่เพิ่งลบไปได้ในรอบเดียวกัน
+document.getElementById('btn-history-delete-everything').addEventListener('click', guardClick_(async () => {
+  const totalItems = (state.archivedRoundsRaw || []).length + (state.archivedBuses || []).length +
+    (state.archivedUsers || []).length + (state.archivedStudents || []).length +
+    (state.archivedRegs || []).length + (state.archivedAlerts || []).length;
+  if (!totalItems) { toast('ไม่มีรายการในประวัติเลย'); return; }
+  if (!confirm('ลบทุกรายการในประวัติดำเนินการทั้งหมด (' + totalItems + ' รายการ) ถาวร? กู้คืนไม่ได้')) return;
+
+  const rounds = state.archivedRoundsRaw || [];
+  const roundResults = await Promise.all(rounds.map((r) => api('round.delete', { roundId: r.round_id })));
+  const roundsDeleted = roundResults.filter((r) => r.ok).length;
+
+  // รีโหลดก่อนไล่ลบที่เหลือ — ให้แน่ใจว่ารายชื่อผู้ใช้/นักเรียนที่ยังติดประวัติเช็คยอดของรอบที่เพิ่งลบ
+  // ไปเป็นข้อมูลล่าสุดจริง ๆ ก่อนลองลบ (ไม่ใช้ state ค้างจากก่อนลบรอบเช็ค)
+  await Promise.all([loadArchivedBuses_(), loadArchivedUsers_(), loadArchivedStudents_(), loadArchivedRegs_(), loadArchivedAlerts_()]);
+
+  const [buses, users, students, regs, alerts] = await Promise.all([
+    purgeSection_(state.archivedBuses || [], 'bus.delete', (b) => ({ busId: b.bus_id })),
+    purgeSection_(state.archivedUsers || [], 'user.delete', (u) => ({ userId: u.user_id })),
+    purgeSection_(state.archivedStudents || [], 'student.delete', (s) => ({ studentId: s.student_id })),
+    purgeSection_(state.archivedRegs || [], 'reg.delete', (rr) => ({ regId: rr.reg_id })),
+    purgeSection_(state.archivedAlerts || [], 'alert.delete', (a) => ({ alertId: a.alert_id }))
+  ]);
+  const totalDeleted = roundsDeleted + buses.deleted + users.deleted + students.deleted + regs.deleted + alerts.deleted;
+  const totalSkipped = buses.skipped + users.skipped + students.skipped;
+  document.getElementById('s06-summary').textContent = 'ลบสำเร็จ ' + totalDeleted + ' รายการ' +
+    (totalSkipped ? ' — ข้าม ' + totalSkipped + ' รายการ (ยังมีประวัติเช็คยอดผูกอยู่)' : '');
+  toast('ลบทั้งหมดเสร็จแล้ว — สำเร็จ ' + totalDeleted + ' รายการ' + (totalSkipped ? ' ข้าม ' + totalSkipped : ''));
+  await loadHistoryScreen_();
+}));
 
 // ---------------------------------------------------------------------------
 // S-16 รายงาน: ใครเช็คใคร (มุมรายนักเรียน / รายครู)
@@ -1244,7 +1454,7 @@ function renderUsersList_(users) {
     (grantable.some(r => r.role_code === u.role_code) ? '' : '<option value="' + u.role_code + '" selected disabled>' + u.role_name + ' (ปัจจุบัน)</option>') +
     '</select>' +
     '<button class="btn btn-secondary" style="min-height:36px;padding:6px 10px;font-size:13px;" data-toggle-status="' + u.user_id + '" data-current-status="' + u.status + '">' + (u.status === 'SUSPENDED' ? 'เปิดใช้งาน' : 'ระงับ') + '</button>' +
-    '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-delete-user="' + u.user_id + '" data-name="' + u.display_name + '">ลบถาวร</button>' +
+    (myLevel === 100 ? '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-delete-user="' + u.user_id + '" data-name="' + u.display_name + '">เก็บเข้าประวัติ</button>' : '') +
     '</div>' +
     '</div>'
   )).join('');
@@ -1280,15 +1490,15 @@ function renderUsersList_(users) {
     loadUsersList_();
   })));
 
-  // ลบถาวร — ใช้ได้เฉพาะผู้ใช้ที่ไม่เคยมีประวัติเช็คยอดผูกอยู่เลย (server เช็คซ้ำแล้วปฏิเสธด้วย
-  // E_HAS_HISTORY ถ้ามี) ถ้าเคยใช้งานจริงต้องกด "ระงับ" แทนเสมอ — ลบถาวรกู้คืนไม่ได้
+  // เก็บเข้าประวัติดำเนินการ — ซ่อนจากรายชื่อนี้ทันที กู้คืนได้เสมอจากหน้า "ประวัติดำเนินการ"
+  // (เฉพาะ SUPER_ADMIN เท่านั้นที่เห็นปุ่มนี้ — ลบถาวรจริงทำได้จากหน้าประวัติเท่านั้น)
   list.querySelectorAll('[data-delete-user]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
     const userId = e.currentTarget.dataset.deleteUser;
     const name = e.currentTarget.dataset.name;
-    if (!confirm('ลบผู้ใช้ "' + name + '" ถาวร? กู้คืนไม่ได้ (ลบได้เฉพาะคนที่ไม่เคยเช็คยอดมาก่อน)')) return;
-    const r = await api('user.delete', { userId: userId });
+    if (!confirm('เก็บ "' + name + '" เข้าประวัติดำเนินการ? จะซ่อนจากรายชื่อนี้ทันที กู้คืนได้ภายหลังจากหน้า "ประวัติดำเนินการ"')) return;
+    const r = await api('user.archive', { userId: userId });
     if (!r.ok) { toast(r.error.message); return; }
-    toast('ลบ "' + name + '" ถาวรแล้ว');
+    toast('เก็บ "' + name + '" เข้าประวัติแล้ว');
     loadUsersList_();
   })));
 }
@@ -1323,6 +1533,7 @@ async function loadStudentsList_() {
 function renderStudentsList_(students) {
   const list = document.getElementById('s18-list');
   if (!students.length) { list.innerHTML = '<div class="empty-state">ไม่พบนักเรียน</div>'; return; }
+  const isSuperAdmin = !!(state.profile && state.profile.level === 100);
 
   list.innerHTML = students.map(s => (
     '<div class="roster-row" style="flex-direction:column;align-items:stretch;gap:6px;">' +
@@ -1334,7 +1545,7 @@ function renderStudentsList_(students) {
     '<div style="display:flex;gap:8px;">' +
     '<button class="btn btn-secondary" style="flex:1;min-height:36px;padding:6px 10px;font-size:13px;" data-toggle-student="' + s.student_id + '" data-current-status="' + s.status + '">' +
     (s.status === 'ACTIVE' ? 'ระงับ' : 'เปิดใช้งานอีกครั้ง') + '</button>' +
-    '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-delete-student="' + s.student_id + '" data-name="' + s.name + '">ลบถาวร</button>' +
+    (isSuperAdmin ? '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-delete-student="' + s.student_id + '" data-name="' + s.name + '">เก็บเข้าประวัติ</button>' : '') +
     '</div>' +
     '</div>'
   )).join('');
@@ -1349,15 +1560,15 @@ function renderStudentsList_(students) {
     loadStudentsList_();
   })));
 
-  // ลบถาวร — ใช้ได้เฉพาะนักเรียนที่ไม่เคยมีประวัติเช็คยอดผูกอยู่เลย (server เช็คซ้ำแล้วปฏิเสธด้วย
-  // E_HAS_HISTORY ถ้ามี) ถ้าเคยใช้งานจริงต้องกด "ระงับ" แทนเสมอ — ลบถาวรกู้คืนไม่ได้
+  // เก็บเข้าประวัติดำเนินการ — ซ่อนจากรายชื่อนี้ทันที กู้คืนได้เสมอจากหน้า "ประวัติดำเนินการ"
+  // (เฉพาะ SUPER_ADMIN เท่านั้นที่เห็นปุ่มนี้ — ลบถาวรจริงทำได้จากหน้าประวัติเท่านั้น)
   list.querySelectorAll('[data-delete-student]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
     const studentId = e.currentTarget.dataset.deleteStudent;
     const name = e.currentTarget.dataset.name;
-    if (!confirm('ลบนักเรียน "' + name + '" ถาวร? กู้คืนไม่ได้ (ลบได้เฉพาะคนที่ไม่เคยเช็คยอดมาก่อน)')) return;
-    const r = await api('student.delete', { studentId: studentId });
+    if (!confirm('เก็บ "' + name + '" เข้าประวัติดำเนินการ? จะซ่อนจากรายชื่อนี้ทันที กู้คืนได้ภายหลังจากหน้า "ประวัติดำเนินการ"')) return;
+    const r = await api('student.archive', { studentId: studentId });
     if (!r.ok) { toast(r.error.message); return; }
-    toast('ลบ "' + name + '" ถาวรแล้ว');
+    toast('เก็บ "' + name + '" เข้าประวัติแล้ว');
     loadStudentsList_();
   })));
 }
@@ -2016,6 +2227,7 @@ async function renderVouchesList_() {
 function renderBusList_(buses) {
   const list = document.getElementById('s20-list');
   if (!buses.length) { list.innerHTML = '<div class="empty-state">ยังไม่มีรถในระบบ</div>'; return; }
+  const isSuperAdmin = !!(state.profile && state.profile.level === 100);
   list.innerHTML = buses.map(b => (
     '<div class="roster-row" style="opacity:' + (b.is_active ? '1' : '0.45') + '">' +
     '<div style="flex:1">' +
@@ -2031,6 +2243,7 @@ function renderBusList_(buses) {
     '<div style="display:flex;gap:6px;flex-shrink:0">' +
     '<button class="btn btn-secondary" style="min-height:36px;padding:6px 10px;" data-bus-edit="' + b.bus_id + '" aria-label="แก้ไขรถ ' + b.bus_code + '" title="แก้ไข">' + ic('pencil') + '</button>' +
     '<button class="btn ' + (b.is_active ? 'btn-danger' : 'btn-secondary') + '" style="min-height:36px;padding:6px 10px;font-size:13px;" data-bus-toggle="' + b.bus_id + '" data-bus-active="' + b.is_active + '">' + (b.is_active ? 'ปิด' : 'เปิด') + '</button>' +
+    (isSuperAdmin ? '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;" data-bus-archive="' + b.bus_id + '" aria-label="เก็บรถ ' + b.bus_code + ' เข้าประวัติ" title="เก็บเข้าประวัติ">' + ic('clock') + '</button>' : '') +
     '</div>' +
     '</div>'
   )).join('');
@@ -2048,6 +2261,18 @@ function renderBusList_(buses) {
     if (currently && !confirm('ปิดใช้งาน ' + busLabel + '?\nรถที่ปิดจะไม่แสดงในรายการเลือกรถสำหรับรอบเช็คใหม่')) return;
     const r = await api('bus.setActive', { busId, active: !currently });
     if (r.ok) { toast(currently ? 'ปิดใช้งานแล้ว' : 'เปิดใช้งานแล้ว'); loadBuses_({ silent: true }); }
+    else toast(r.error.message);
+  })));
+
+  // เก็บเข้าประวัติดำเนินการ — ต่างจาก "ปิด" (is_active) ตรงที่ซ่อนออกจากหน้านี้ไปเลย กู้คืนได้จาก
+  // หน้า "ประวัติดำเนินการ" (เฉพาะ SUPER_ADMIN)
+  list.querySelectorAll('[data-bus-archive]').forEach(btn => btn.addEventListener('click', guardClick_(async () => {
+    const busId = btn.dataset.busArchive;
+    const bus = buses.find(b => b.bus_id === busId);
+    const busLabel = bus ? 'รถ ' + bus.bus_code : busId;
+    if (!confirm('เก็บ ' + busLabel + ' เข้าประวัติดำเนินการ? จะซ่อนจากรายการนี้ทันที กู้คืนได้ภายหลังจากหน้า "ประวัติดำเนินการ"')) return;
+    const r = await api('bus.archive', { busId });
+    if (r.ok) { toast('เก็บ ' + busLabel + ' เข้าประวัติแล้ว'); loadBuses_({ silent: true }); }
     else toast(r.error.message);
   })));
 }

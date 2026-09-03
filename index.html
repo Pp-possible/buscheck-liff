@@ -8,7 +8,7 @@
      บนมือถือ cache ไฟล์ static พวกนี้แน่นมาก แก้โค้ดแล้ว deploy ขึ้นจริงแล้วแต่ผู้ใช้ยังเห็นของเก่าอยู่ได้
      ทุกครั้งที่แก้ styles.css/app.js/config.js แล้วต้องการให้มือถือดึงของใหม่ทันที ต้องขยับเลขวันที่นี้ขึ้น
      (เปลี่ยน query string ทำให้ browser มองเป็นคนละไฟล์ ข้าม cache เก่าไปเลย ไม่ต้องรอ revalidate) -->
-<link rel="stylesheet" href="styles.css?v=20260903a">
+<link rel="stylesheet" href="styles.css?v=20260903b">
 <script>
   // ตัวจับ error ถาวร — โชว์ error ตรงจอเลยเมื่อมีปัญหาจริงเท่านั้น (ปกติจะไม่ขึ้นอะไร)
   // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้ เวลามีปัญหาจะได้เห็นสาเหตุจากภาพหน้าจอผู้ใช้ได้เลย
@@ -321,12 +321,38 @@
   <!-- ============ S-06 ประวัติรอบรถ (รอบที่เก็บออกจากรอบเช็ควันนี้) ============ -->
   <section class="screen" data-screen="S-06">
     <div class="topbar">
-      <button class="back" data-back="S-02" aria-label="ย้อนกลับ">←</button>
-      <h1 class="title">ประวัติรอบรถ</h1>
-      <button class="back" id="btn-refresh-round-history" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
+      <button class="back" data-back="S-01" aria-label="ย้อนกลับ">←</button>
+      <h1 class="title">ประวัติดำเนินการ</h1>
+      <button class="back" id="btn-refresh-history" title="รีเฟรชทั้งหมด" aria-label="รีเฟรชทั้งหมด"><svg class="icon"><use href="#i-refresh"/></svg></button>
     </div>
+    <p style="padding:0 16px;color:var(--text-muted);font-size:13px;">รายการที่ "เก็บเข้าประวัติ" จากหน้าต่าง ๆ จะมารวมที่นี่ — คืนค่ากลับไปใช้งานได้ หรือลบถาวรทีละรายการ/ทั้งหมวดก็ได้ (ลบถาวรแล้วกู้คืนไม่ได้)</p>
+    <button class="btn btn-danger btn-block" id="btn-history-delete-everything" style="margin:8px 16px;width:calc(100% - 32px);">ลบทั้งหมดทุกอย่าง (ถาวร)</button>
+    <div id="s06-summary" style="padding:0 16px;font-size:13px;color:var(--text-muted);"></div>
+
+    <div class="card-title" style="margin:16px 16px 4px;">รอบเช็ค</div>
     <div class="sync-indicator" id="s06-sync"></div>
     <div id="s06-list"></div>
+    <button class="btn btn-secondary btn-block" id="btn-history-delete-all-rounds" style="margin:8px 16px;width:calc(100% - 32px);">ลบทั้งหมด (รอบเช็ค)</button>
+
+    <div class="card-title" style="margin:16px 16px 4px;">รถ</div>
+    <div id="s06-buses-list"></div>
+    <button class="btn btn-secondary btn-block" id="btn-history-delete-all-buses" style="margin:8px 16px;width:calc(100% - 32px);">ลบทั้งหมด (รถ)</button>
+
+    <div class="card-title" style="margin:16px 16px 4px;">ผู้ใช้</div>
+    <div id="s06-users-list"></div>
+    <button class="btn btn-secondary btn-block" id="btn-history-delete-all-users" style="margin:8px 16px;width:calc(100% - 32px);">ลบทั้งหมด (ผู้ใช้)</button>
+
+    <div class="card-title" style="margin:16px 16px 4px;">นักเรียน</div>
+    <div id="s06-students-list"></div>
+    <button class="btn btn-secondary btn-block" id="btn-history-delete-all-students" style="margin:8px 16px;width:calc(100% - 32px);">ลบทั้งหมด (นักเรียน)</button>
+
+    <div class="card-title" style="margin:16px 16px 4px;">คิวอนุมัติ (ผ่านการพิจารณาแล้ว)</div>
+    <div id="s06-regs-list"></div>
+    <button class="btn btn-secondary btn-block" id="btn-history-delete-all-regs" style="margin:8px 16px;width:calc(100% - 32px);">ลบทั้งหมด (คิวอนุมัติ)</button>
+
+    <div class="card-title" style="margin:16px 16px 4px;">แจ้งเตือน (รับทราบแล้ว)</div>
+    <div id="s06-alerts-list"></div>
+    <button class="btn btn-secondary btn-block" id="btn-history-delete-all-alerts" style="margin:24px 16px;width:calc(100% - 32px);">ลบทั้งหมด (แจ้งเตือน)</button>
   </section>
 
   <!-- ============ S-14 รายละเอียดรอบเช็ค (การ์ดรถแต่ละคันของรอบที่เลือก) ============ -->
@@ -709,7 +735,7 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" onerror="showDebug_('โหลด LIFF SDK ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="showDebug_('โหลด html5-qrcode ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="showDebug_('โหลด qrcodejs ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
-<script src="config.js?v=20260903a"></script>
-<script src="app.js?v=20260903a"></script>
+<script src="config.js?v=20260903b"></script>
+<script src="app.js?v=20260903b"></script>
 </body>
 </html>
