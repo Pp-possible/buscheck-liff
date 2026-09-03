@@ -797,7 +797,7 @@ function renderSessionBusCards_(rounds, opts) {
   const canManage = state.permissions && state.permissions.indexOf('round.open') !== -1;
   const canEdit = state.permissions && state.permissions.indexOf('round.edit') !== -1;
   const isSuperAdmin = !!(state.profile && state.profile.level === 100);
-  // หัวหน้าสาย (SUPERVISOR) ลงมาทำซ้ำรอบไม่ได้เหมือนกัน เพราะ "ทำซ้ำ" คือสร้างรอบใหม่ (round.create)
+  // หัวหน้าสาย (SUPERVISOR) ลงมาเพิ่มรถเข้ารอบไม่ได้ เพราะ "เพิ่มรถ" คือสร้างรอบใหม่ (round.create)
   const canCreateRound = !!(state.profile && state.profile.level >= 80);
 
   const canClose = state.permissions && state.permissions.indexOf('round.close') !== -1;
@@ -837,8 +837,8 @@ function renderSessionBusCards_(rounds, opts) {
       (round.status === 'OPEN' && canClose ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-round="' + round.round_id + '">ปิดรอบ</button>' : '') +
       (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
       (isClosed && canCloseTrip && round.trip_id ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-trip="' + round.trip_id + '">ปิดเที่ยวรถ</button>' : '') +
+      ((round.status === 'OPEN' || isClosed) ? '<button class="btn btn-secondary" style="margin-top:8px" data-view-roster="' + round.round_id + '">ดูรายชื่อ</button>' : '') +
       ((isPlanned || round.status === 'OPEN') && canEdit ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
-      (canManage && canCreateRound && !archivedList ? '<button class="btn btn-secondary" style="margin-top:8px" data-duplicate="' + round.round_id + '">ทำซ้ำ</button>' : '') +
       (canManage && archivedList ? '<button class="btn btn-danger" style="margin-top:8px" data-delete-permanent="' + round.round_id + '">ลบถาวร</button>' : '') +
       '<div class="blocker-list" id="blockers-' + round.round_id + '"></div>' +
       '</div></div>';
@@ -863,8 +863,15 @@ function renderSessionBusCards_(rounds, opts) {
   })));
   list.querySelectorAll('[data-wait-open]').forEach(btn => btn.addEventListener('click', () => toast('รอ Super Admin เปิดรอบรถ')));
   list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
-  list.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.edit], false)));
-  list.querySelectorAll('[data-duplicate]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.duplicate], true)));
+  list.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.edit])));
+  // ดูรายชื่อ — เปิดหน้ารายชื่อ (S-04) ตรงจากการ์ดรอบนี้เลย ไม่ต้องเข้าโหมดสแกนก่อน ย้อนกลับมาที่หน้านี้ได้
+  list.querySelectorAll('[data-view-roster]').forEach(btn => btn.addEventListener('click', () => {
+    state.currentRoundId = btn.dataset.viewRoster;
+    const backBtn = document.querySelector('[data-screen="S-04"] [data-back]');
+    if (backBtn) backBtn.dataset.back = 'S-14';
+    showScreen('S-04');
+    loadRoster_();
+  }));
   list.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', guardClick_(async (e) => {
     if (!confirm('ยืนยันลบรอบเช็คนี้?')) return;
     const roundId = e.currentTarget.dataset.delete;
@@ -1218,6 +1225,12 @@ document.getElementById('s16-tabs').querySelectorAll('.chip').forEach(chip => ch
   document.getElementById('s16-checker-panel').style.display = tab === 'checker' ? 'block' : 'none';
 }));
 
+// ตัด offset ออกก่อน toISOString ให้ได้วันที่ตามเวลาท้องถิ่นตรง ๆ — ถ้าใช้ toISOString() ตรง ๆ
+// ช่วง 00:00-06:59 น. ของไทย (UTC+7) จะได้วันที่ของเมื่อวานแทน (toISOString แปลงเป็น UTC ก่อนตัด)
+function localDateStr_(d) {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 function initReportScreen_() {
   document.getElementById('s16-tabs').querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', c.dataset.tab === 'student'));
   document.getElementById('s16-student-panel').style.display = 'block';
@@ -1226,13 +1239,13 @@ function initReportScreen_() {
   state.s16StudentId = null;
   document.getElementById('s16-student-search').value = '';
   document.getElementById('s16-student-results').innerHTML = '';
-  document.getElementById('s16-student-timeline').innerHTML = '';
-  document.getElementById('s16-student-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('s16-student-timeline').innerHTML = '<div class="empty-state">พิมพ์ค้นหาชื่อนักเรียนด้านบน เพื่อดูว่าวันนี้ถูกเช็คในรอบไหนไปแล้วบ้าง</div>';
+  document.getElementById('s16-student-date').value = localDateStr_(new Date());
 
   const to = new Date();
   const from = new Date(to.getTime() - 6 * 86400000);
-  document.getElementById('s16-checker-to').value = to.toISOString().slice(0, 10);
-  document.getElementById('s16-checker-from').value = from.toISOString().slice(0, 10);
+  document.getElementById('s16-checker-to').value = localDateStr_(to);
+  document.getElementById('s16-checker-from').value = localDateStr_(from);
   document.getElementById('s16-checker-result').innerHTML = '';
   loadCheckerPicker_();
 }
@@ -1243,9 +1256,10 @@ document.getElementById('s16-student-search').addEventListener('input', (e) => {
   const q = e.target.value.trim();
   const resultsEl = document.getElementById('s16-student-results');
   if (!q) { resultsEl.innerHTML = ''; return; }
+  resultsEl.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
   s16SearchDebounce = setTimeout(async () => {
     const r = await api('student.searchAll', { q: q });
-    if (!r.ok) return;
+    if (!r.ok) { resultsEl.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
     resultsEl.innerHTML = r.data.map(s =>
       '<div class="roster-row" data-pick="' + s.student_id + '" data-name="' + (s.nickname || s.name) + '"><div><div class="name">' + (s.nickname || s.name) + '</div>' +
       '<div class="meta">' + s.name + ' · ' + s.class + '</div></div></div>'
@@ -1328,26 +1342,63 @@ function sessionStatusMeta_(status) {
   return { label: 'รอเปิด', cls: 'badge-none', icon: ic('clock') };
 }
 
+// ลำดับกลุ่ม "รอบเช็ค" ของวันนี้ เรียงตามเวลาจริงจากรอบแรกไปหลัง (อ่านเป็นลำดับเหตุการณ์ของวันนี้
+// ไม่ใช่ "ล่าสุดก่อน" แบบ S-02) — ใช้ทั้งตอน render และตอน handler เจาะดูรายละเอียด ต้องได้ลำดับเดียวกันเป๊ะ
+// เพราะการ์ด "ดูคนที่ยังไม่เช็ค" อ้างอิงกลุ่มด้วย index ในลำดับนี้
+function getSortedDashboardGroups_() {
+  return groupRoundsForDisplay_(state.activeRoundsRaw || []).slice()
+    .sort((a, b) => String(a.scheduled_at || '').localeCompare(String(b.scheduled_at || '')));
+}
+
+// แถบสรุปภาพรวมทั้งวัน — ให้เห็นภาพรวมทั้งหมดในแวบเดียว (จำนวนรอบ/สถานะ/ยอดรวม) แยกจากรายการ
+// การ์ดรอบเช็คแต่ละใบด้านล่าง ไม่ให้หน้านี้ดูเหมือนเอา "รอบของฉัน" มาแปะซ้ำเฉยๆ
+function renderDashboardOverview_(groups) {
+  const openCount = groups.filter(g => aggregateGroupStatus_(g) === 'OPEN').length;
+  const closedCount = groups.filter(g => aggregateGroupStatus_(g) === 'CLOSED').length;
+  const pendingCount = groups.length - openCount - closedCount;
+  const checked = groups.reduce((s, g) => s + g.rounds.reduce((s2, r) => s2 + (r.checked || 0), 0), 0);
+  const expected = groups.reduce((s, g) => s + g.rounds.reduce((s2, r) => s2 + (r.expected || 0), 0), 0);
+  const pct = expected ? Math.round((checked / expected) * 100) : 0;
+  return '<div class="card" style="margin:12px 16px;">' +
+    '<div class="card-title">ภาพรวมวันนี้</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
+      '<div class="count-box"><div class="num">' + groups.length + '</div><div class="label">รอบเช็ค</div></div>' +
+      '<div class="count-box"><div class="num">' + openCount + '</div><div class="label">กำลังดำเนินการ</div></div>' +
+      '<div class="count-box"><div class="num">' + closedCount + '</div><div class="label">เสร็จแล้ว</div></div>' +
+      '<div class="count-box"><div class="num">' + pendingCount + '</div><div class="label">รอเปิด</div></div>' +
+    '</div>' +
+    '<div class="progress-bar"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
+    '<div class="progress" style="margin-top:6px;">เช็คแล้ว ' + checked + '/' + expected + ' คน (' + pct + '%) รวมทั้งวัน</div>' +
+    '</div>';
+}
+
 // การ์ด dashboard ของ "รอบเช็ค" หนึ่งกลุ่ม — โชว์ทั้งตัวเลขจริง (checked/expected) และ progress bar
 // เสมอคู่กัน (ไม่ใช้สีสื่อสถานะเพียงอย่างเดียว) กดแล้วเจาะดูรายคันรถได้ที่หน้าเดียวกับ S-02/S-14
-function renderSessionDashboardCard_(group) {
+// ถ้ายังเช็คไม่ครบ มีลิงก์ดูรายชื่อคนที่ยังไม่เช็ค (รวมทุกคันรถในกลุ่มนี้) แทรกไว้ในการ์ดเลย
+function renderSessionDashboardCard_(group, idx) {
   const typeLabel = ROUND_TYPE_LABELS_[group.round_type] || group.round_type;
   const status = aggregateGroupStatus_(group);
   const meta = sessionStatusMeta_(status);
   const checked = group.rounds.reduce((s, r) => s + (r.checked || 0), 0);
   const expected = group.rounds.reduce((s, r) => s + (r.expected || 0), 0);
   const pct = expected ? Math.round((checked / expected) * 100) : 0;
-  return '<div class="round-item"><div class="round-item-content" data-open-group="' + group.key + '">' +
-    '<div class="row1"><span class="status-badge ' + meta.cls + '">' + meta.icon + ' ' + meta.label + '</span> ' + formatThaiDateTime_(group.scheduled_at) + '</div>' +
-    '<div class="progress">' + typeLabel + ' · ' + group.round_name + ' · ' + group.rounds.length + ' คัน</div>' +
-    '<div class="progress-bar" style="margin:6px 0 4px;"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
-    '<div class="progress">' + checked + '/' + expected + ' คน (' + pct + '%)</div>' +
-    '<div class="drill-hint">ดูรายคันรถ →</div>' +
-    '</div></div>';
+  const missing = expected - checked;
+  return '<div class="round-item">' +
+    '<div class="round-item-content" data-open-group="' + group.key + '">' +
+      '<div class="row1"><span class="status-badge ' + meta.cls + '">' + meta.icon + ' ' + meta.label + '</span> ' + formatThaiDateTime_(group.scheduled_at) + '</div>' +
+      '<div class="progress">' + typeLabel + ' · ' + group.round_name + ' · ' + group.rounds.length + ' คัน</div>' +
+      '<div class="progress-bar" style="margin:6px 0 4px;"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="progress">' + checked + '/' + expected + ' คน (' + pct + '%)</div>' +
+      '<div class="drill-hint">ดูรายคันรถ →</div>' +
+    '</div>' +
+    (missing > 0
+      ? '<div class="drill-hint" data-toggle-missing="' + idx + '" style="cursor:pointer;text-align:left;padding:0 14px 12px;background:var(--card-bg);">' + ic('alert-octagon') + ' ยังไม่เช็ค ' + missing + ' คน — ดูรายชื่อ →</div>' +
+        '<div id="missing-' + idx + '" style="display:none;padding:0 14px 12px;background:var(--card-bg);"></div>'
+      : '') +
+    '</div>';
 }
 
-// dashboard หลักของหน้านี้ — เอารอบของ "ทั้งวัน" (เช้า+บ่ายรวมกัน จาก backend สองก้อน) มาจัดกลุ่มเป็น
-// รอบเช็คแล้วเรียงตามเวลาจริงจากรอบแรกไปหลัง (อ่านเป็นลำดับเหตุการณ์ของวันนี้ ไม่ใช่ "ล่าสุดก่อน" แบบ S-02)
+// dashboard หลักของหน้านี้ — เอารอบของ "ทั้งวัน" (เช้า+บ่ายรวมกัน จาก backend สองก้อน) มาจัดกลุ่มเป็นรอบเช็ค
 function renderSessionDashboard_(amRounds, pmRounds) {
   const rounds = (amRounds || []).concat(pmRounds || []);
   if (!rounds.length) return '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>';
@@ -1355,17 +1406,40 @@ function renderSessionDashboard_(amRounds, pmRounds) {
   rounds.forEach(r => { state.roundsById[r.round_id] = r; });
   state.activeRoundsRaw = rounds;
 
-  const groups = groupRoundsForDisplay_(rounds).slice()
-    .sort((a, b) => String(a.scheduled_at || '').localeCompare(String(b.scheduled_at || '')));
-  return groups.map(renderSessionDashboardCard_).join('');
+  const groups = getSortedDashboardGroups_();
+  return renderDashboardOverview_(groups) + groups.map(renderSessionDashboardCard_).join('');
 }
 
 function wireSessionDashboardCards_() {
   document.querySelectorAll('#s07-summary [data-open-group]').forEach(el => el.addEventListener('click', () => {
-    const groups = groupRoundsForDisplay_(state.activeRoundsRaw || []);
+    const groups = getSortedDashboardGroups_();
     const group = groups.find(g => g.key === el.dataset.openGroup);
     if (group) navigateToSession_(group, false, 'S-07');
   }));
+
+  // ดูคนที่ยังไม่เช็คของรอบเช็คกลุ่มนี้ (รวมทุกคันรถ) — ดึง round.checks ของทุกรอบในกลุ่มมารวมกัน
+  // เอาเฉพาะคนที่ยังไม่มีผลเช็ค (result เป็น null) มาโชว์พร้อมชื่อรถที่ควรขึ้น
+  document.querySelectorAll('#s07-summary [data-toggle-missing]').forEach(el => el.addEventListener('click', guardClick_(async (e) => {
+    const idx = e.currentTarget.dataset.toggleMissing;
+    const container = document.getElementById('missing-' + idx);
+    if (!container) return;
+    if (container.style.display === 'block') { container.style.display = 'none'; return; }
+    const groups = getSortedDashboardGroups_();
+    const group = groups[idx];
+    if (!group) return;
+    container.style.display = 'block';
+    container.innerHTML = '<div class="spinner"></div>';
+    const results = await Promise.all(group.rounds.map(r => api('round.checks', { roundId: r.round_id })));
+    const missingItems = [];
+    results.forEach((r, i) => {
+      if (!r.ok) return;
+      const busLabel = (state.busMap && state.busMap[group.rounds[i].scope_id]) || group.rounds[i].scope_id || '';
+      r.data.items.filter(it => !it.result).forEach(it => missingItems.push({ name: it.name, bus: busLabel }));
+    });
+    container.innerHTML = missingItems.length
+      ? missingItems.map(m => '<div class="roster-row"><div class="name">' + m.name + '</div><span class="status-pill">' + m.bus + '</span></div>').join('')
+      : '<div class="empty-state">เช็คครบทุกคนแล้ว</div>';
+  })));
 }
 
 async function loadDaySummary_() {
@@ -1400,12 +1474,8 @@ function renderCloseStatus_(am, pm) {
 
   const pending = directions.filter(d => d.status !== 'CLOSED');
   const totalBlocked = pending.reduce((s, d) => s + (d.blockers || []).reduce((s2, b) => s2 + b.count, 0), 0);
-  if (totalBlocked > 0) {
-    return '<div class="card" style="margin:12px 16px;border-color:var(--color-error);">' +
-      '<div style="color:var(--color-error);font-weight:700;">' + ic('alert-octagon') + ' ยังปิดยอดไม่ได้ — ยังมีรอบเช็ค/เที่ยวรถที่ยังไม่ปิดอยู่ ' + totalBlocked + ' รายการ</div>' +
-      '<div class="progress">ปิดรอบเช็คและเที่ยวรถของวันนี้ให้ครบก่อน แล้วกลับมาที่นี่</div>' +
-      '</div>';
-  }
+  // ยังปิดไม่ได้ — ไม่ต้องเตือนซ้ำตรงนี้ เพราะการ์ดรอบเช็คแต่ละใบด้านบนก็เห็นอยู่แล้วว่าใบไหนยังไม่ปิด
+  if (totalBlocked > 0) return '';
   if (canClose) {
     return '<div class="card" style="margin:12px 16px;">' +
       '<div class="row1" style="font-weight:700;">' + ic('check-circle', 'icon-ok') + ' ยอดครบแล้ว พร้อมปิดยอด</div>' +
@@ -1736,7 +1806,7 @@ function nowForDatetimeLocal_() {
 }
 
 // สลับขั้นตอนของ dialog สร้างรอบ — โหมดแก้ไขมีขั้นตอนเดียว (ไม่มีขั้นที่ 2 เพราะแก้ได้แค่คันเดียวที่มีอยู่แล้ว)
-// โหมดสร้างใหม่/ทำซ้ำ ขั้นที่ 1 = ชื่อ/ประเภท/เวลา ขั้นที่ 2 = เลือกรถ (เลือกได้หลายคัน สร้างพร้อมกันทีเดียว)
+// โหมดสร้างใหม่ ขั้นที่ 1 = ชื่อ/ประเภท/เวลา ขั้นที่ 2 = เลือกรถ (เลือกได้หลายคัน สร้างพร้อมกันทีเดียว)
 function showCreateRoundStep_(step) {
   state.crStep = step;
   document.getElementById('cr-step1').style.display = step === 1 ? 'block' : 'none';
@@ -1748,16 +1818,16 @@ function showCreateRoundStep_(step) {
   submitBtn.textContent = state.crMode === 'edit' ? 'บันทึก' : state.crMode === 'addToSession' ? 'เพิ่มรถ' : (step === 1 ? 'ถัดไป' : 'สร้างรอบ');
 }
 
-// existingRound: ไม่ใส่ = สร้างใหม่, ใส่ + duplicate=false = แก้ไขรอบเดิม, ใส่ + duplicate=true = ทำซ้ำเป็นรอบใหม่
-async function openCreateRoundDialog_(existingRound, duplicate) {
-  const isEdit = !!(existingRound && !duplicate);
+// existingRound: ไม่ใส่ = สร้างใหม่, ใส่ = แก้ไขรอบเดิม
+async function openCreateRoundDialog_(existingRound) {
+  const isEdit = !!existingRound;
   state.crMode = isEdit ? 'edit' : 'create';
 
   document.getElementById('dlg-create-round-title').textContent = isEdit ? 'แก้ไขรอบเช็ค' : 'สร้างรอบเช็คใหม่';
   document.getElementById('cr-round-id').value = isEdit ? existingRound.round_id : '';
   document.getElementById('cr-name').value = existingRound ? existingRound.round_name : '';
   document.getElementById('cr-type').value = existingRound ? existingRound.round_type : 'BOARD';
-  document.getElementById('cr-type').disabled = isEdit; // แก้ประเภทรอบเดิมไม่ได้ (round.update ไม่รองรับ) — ทำซ้ำเป็นรอบใหม่แทนถ้าอยากเปลี่ยน
+  document.getElementById('cr-type').disabled = isEdit; // แก้ประเภทรอบเดิมไม่ได้ (round.update ไม่รองรับ) — ถ้าจะเปลี่ยนประเภทต้องลบแล้วสร้างรอบใหม่
   document.getElementById('cr-scheduled-at').value = (existingRound && existingRound.scheduled_at) ? existingRound.scheduled_at.slice(0, 16) : nowForDatetimeLocal_();
   document.getElementById('cr-require-all').checked = existingRound ? existingRound.require_all : true;
   document.getElementById('cr-edit-bus-field').style.display = isEdit ? 'block' : 'none';
@@ -1780,7 +1850,7 @@ async function openCreateRoundDialog_(existingRound, duplicate) {
     if (buses.some(b => b.bus_id === existingRound.scope_id)) busSelEdit.value = existingRound.scope_id;
   } else {
     busMulti.innerHTML = buses.map(b =>
-      '<div class="chip' + (duplicate && existingRound.scope_id === b.bus_id ? ' selected' : '') + '" data-bus="' + b.bus_id + '">' +
+      '<div class="chip" data-bus="' + b.bus_id + '">' +
       b.bus_code + (b.bus_name && b.bus_name !== b.bus_code ? ' · ' + b.bus_name : '') + '</div>'
     ).join('') || '<div class="empty-state">ไม่มีรถในขอบเขตของคุณ</div>';
     busMulti.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => c.classList.toggle('selected')));
