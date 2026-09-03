@@ -1399,11 +1399,6 @@ function renderAnomaliesSection_(anomalies) {
   (anomalies.stillOpenTooLong || []).forEach(r => items.push(
     ic('alert-triangle', 'icon-amber') + ' รอบ "' + r.round_name + '" เปิดค้างมา ' + r.minutesOpen + ' นาทีแล้ว'
   ));
-  // คนที่ตั้งค่าไม่ครบ (ไม่ผูกรถ/ไม่ตั้งช่วงเวลาขึ้นรถ) จะไม่มีวันโผล่ในรอบไหนเลย ไม่ใช่แค่ "ยังไม่เช็ค"
-  // เฉยๆ ต้องแยกเตือนให้ชัด ไม่งั้นตัวเลข "เช็คครบแล้ว" ด้านบนจะดูครบทั้งที่จริงมีคนหลุดไปทั้งคน
-  (anomalies.unassignedStudents || []).forEach(s => items.push(
-    ic('alert-triangle', 'icon-amber') + ' ' + s.name + ' ' + s.reason + ' — จะไม่ถูกนับในรอบเช็คไหนเลยจนกว่าจะตั้งค่าให้ครบ'
-  ));
   if (!items.length) return '';
   return '<div class="card" style="margin:12px 16px;">' +
     '<div class="card-title">สิ่งที่ควรตรวจสอบ</div>' +
