@@ -1405,13 +1405,14 @@ function wireSessionCards_(groups) {
     const roundIds = group.rounds.map(r => r.round_id);
     const r = await api('day.sessionSummary', { roundIds: roundIds });
     if (!r.ok) { body.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
-    body.innerHTML = renderSessionBody_(group, idx, r.data);
-    wireSessionBody_(idx, r.data);
+    body.innerHTML = renderSessionBody_(group, r.data);
+    wireSessionBody_(idx, group, r.data);
   })));
 }
 
-// ข้อมูลประมวลรวมของ session นี้ + การ์ดรายคันรถ + การ์ดคนที่ยังไม่สแกน (ยุบไว้ก่อน กดดูรายชื่อทีหลัง)
-function renderSessionBody_(group, idx, summary) {
+// ข้อมูลประมวลรวมของ session นี้ + การ์ดรายคันรถ + การ์ดคนที่ยังไม่สแกน — กดคันรถ/ยังไม่สแกนแล้วเปิด
+// หน้าใหม่ (S-25) ไปเลย ไม่ขยายซ้อนอยู่ตรงนี้อีกชั้น เพราะรายชื่อนักเรียนอาจมีเป็นร้อยคน
+function renderSessionBody_(group, summary) {
   const notScannedTotal = summary.schoolTotal - summary.scannedTotal;
   const openCount = group.rounds.filter(r => r.status === 'OPEN').length;
   const closedCount = group.rounds.filter(r => r.status === 'CLOSED').length;
@@ -1426,87 +1427,107 @@ function renderSessionBody_(group, idx, summary) {
     '</div>';
 
   html += '<div class="card-title" style="margin:0 0 6px;">รายคันรถ</div>';
-  html += group.rounds.map((r, bidx) => renderBusMiniCard_(r, idx, bidx)).join('');
+  html += group.rounds.map((r) => renderBusMiniCard_(r)).join('');
 
   html += '<div class="card" style="margin-top:4px;">' +
-    '<div' + (notScannedTotal > 0 ? ' data-notscanned-toggle="' + idx + '" style="cursor:pointer;"' : '') + '>' +
+    '<div data-notscanned-open="1" style="cursor:pointer;">' +
       '<div class="row1">' + ic('alert-octagon') + ' ยังไม่ได้สแกน (' + notScannedTotal + ' คน)</div>' +
-      (notScannedTotal > 0 ? '<div class="drill-hint" id="notscanned-caret-' + idx + '">ดูรายชื่อ →</div>' : '') +
+      '<div class="drill-hint">ดูรายชื่อ →</div>' +
     '</div>' +
-    '<div id="notscanned-body-' + idx + '" style="display:none;margin-top:8px;"></div>' +
     '</div>';
 
   return html;
 }
 
-function renderBusMiniCard_(round, sessionIdx, busIdx) {
+function renderBusMiniCard_(round) {
   const busLabel = (state.busMap && state.busMap[round.scope_id]) || round.scope_id || '';
   const statusLabel = round.status === 'OPEN' ? 'กำลังเช็ค' : round.status === 'CLOSED' ? 'ปิดแล้ว' : 'รอเปิด';
-  const key = sessionIdx + '-' + busIdx;
+  const badgeCls = round.status === 'OPEN' ? 'badge-open' : round.status === 'CLOSED' ? 'badge-closed' : 'badge-none';
   return '<div class="card" style="margin-bottom:8px;">' +
-    '<div data-bus-toggle="' + key + '" data-round-id="' + round.round_id + '" style="cursor:pointer;">' +
-      '<div class="row1"><span class="status-badge">' + (busLabel || '—') + '</span> ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
-      '<div class="drill-hint" id="bus-caret-' + key + '">ดูรายชื่อที่สแกนแล้ว →</div>' +
+    '<div data-bus-open="1" data-round-id="' + round.round_id + '" style="cursor:pointer;">' +
+      '<div class="row1"><span class="status-badge ' + badgeCls + '">' + (busLabel || '—') + '</span> ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
+      '<div class="drill-hint">ดูรายชื่อที่สแกนแล้ว →</div>' +
     '</div>' +
-    '<div id="bus-body-' + key + '" style="display:none;margin-top:8px;"></div>' +
     '</div>';
 }
 
-function wireSessionBody_(sessionIdx, summary) {
+function wireSessionBody_(sessionIdx, group, summary) {
   const scope = document.getElementById('session-body-' + sessionIdx);
 
-  scope.querySelectorAll('[data-bus-toggle]').forEach(el => el.addEventListener('click', guardClick_(async (e) => {
-    const key = e.currentTarget.dataset.busToggle;
-    const roundId = e.currentTarget.dataset.roundId;
-    const body = document.getElementById('bus-body-' + key);
-    const caret = document.getElementById('bus-caret-' + key);
-    if (body.style.display === 'block') { body.style.display = 'none'; caret.textContent = 'ดูรายชื่อที่สแกนแล้ว →'; return; }
-    body.style.display = 'block';
-    caret.textContent = 'ซ่อนรายชื่อ ↑';
-    body.innerHTML = '<div class="spinner"></div>';
-    const r = await api('round.checks', { roundId: roundId });
-    if (!r.ok) { body.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
-    const scanned = r.data.items.filter(it => it.result);
-    body.innerHTML = scanned.length
-      ? scanned.map(it => '<div class="roster-row"><div class="name">' + it.name + '</div><span class="meta">' + (it.checked_by_name || '') + '</span></div>').join('')
-      : '<div class="empty-state">ยังไม่มีใครถูกสแกนบนคันนี้เลย</div>';
-  })));
-
-  const notScannedToggle = scope.querySelector('[data-notscanned-toggle]');
-  if (notScannedToggle) notScannedToggle.addEventListener('click', guardClick_(() => {
-    const body = document.getElementById('notscanned-body-' + sessionIdx);
-    const caret = document.getElementById('notscanned-caret-' + sessionIdx);
-    if (body.style.display === 'block') { body.style.display = 'none'; caret.textContent = 'ดูรายชื่อ →'; return; }
-    body.style.display = 'block';
-    caret.textContent = 'ซ่อนรายชื่อ ↑';
-    body.innerHTML = summary.notScannedStudents.map((s, sidx) => renderNotScannedStudentCard_(s, sessionIdx, sidx)).join('');
-    wireNotScannedStudentCards_(sessionIdx, summary.notScannedStudents);
+  scope.querySelectorAll('[data-bus-open]').forEach(el => el.addEventListener('click', () => {
+    const roundId = el.dataset.roundId;
+    const round = group.rounds.find(r => r.round_id === roundId);
+    if (round) openBusRosterScreen_(round);
   }));
+
+  const notScannedOpen = scope.querySelector('[data-notscanned-open]');
+  if (notScannedOpen) notScannedOpen.addEventListener('click', () => openNotScannedRosterScreen_(group, summary));
 }
 
-// การ์ดรายชื่อคนที่ยังไม่สแกน — แตะเพื่อขยายดูข้อมูลที่ regis ไว้ (หมายเหตุ/เบอร์นักเรียน/เบอร์ผู้ปกครอง)
-// พร้อมปุ่มกดโทรออกตรง ๆ ให้ติดตามได้ทันทีจากตรงนี้เลย ไม่ต้องไปหาที่หน้าอื่น
-function renderNotScannedStudentCard_(s, sessionIdx, sidx) {
-  return '<div class="roster-row" data-student-toggle="' + sessionIdx + '-' + sidx + '" style="cursor:pointer;flex-direction:column;align-items:stretch;">' +
-    '<div class="name">' + s.name + (s.nickname ? ' (' + s.nickname + ')' : '') + '</div>' +
-    '<div id="student-detail-' + sessionIdx + '-' + sidx + '" style="display:none;margin-top:6px;"></div>' +
+// ---------------------------------------------------------------------------
+// S-25 รายชื่อนักเรียน — หน้าเดียวใช้ร่วมกัน 2 โหมด เปิดจากการ์ดในหน้าสรุปยอด (S-07):
+// 'scanned' = สแกนแล้วของรอบรถคันเดียว, 'notscanned' = ยังไม่ได้สแกนของ session นี้ทั้งหมด
+// ---------------------------------------------------------------------------
+
+async function openBusRosterScreen_(round) {
+  const busLabel = (state.busMap && state.busMap[round.scope_id]) || round.scope_id || '';
+  document.getElementById('s25-title').textContent = busLabel + ' — สแกนแล้ว';
+  showScreen('S-25');
+  const list = document.getElementById('s25-list');
+  list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  const r = await api('round.checks', { roundId: round.round_id });
+  if (!r.ok) { list.innerHTML = '<div class="empty-state">' + r.error.message + '</div>'; return; }
+  const scanned = r.data.items.filter(it => it.result);
+  renderStudentRosterScreen_(list, scanned, { countLabel: 'สแกนแล้วบนคันนี้', emptyText: 'ยังไม่มีใครถูกสแกนบนคันนี้เลย', showCheckedInfo: true });
+}
+
+function openNotScannedRosterScreen_(group, summary) {
+  const typeLabel = ROUND_TYPE_LABELS_[group.round_type] || group.round_type;
+  document.getElementById('s25-title').textContent = 'ยังไม่ได้สแกน — ' + typeLabel + ' ' + group.round_name;
+  showScreen('S-25');
+  const list = document.getElementById('s25-list');
+  renderStudentRosterScreen_(list, summary.notScannedStudents, { countLabel: 'ยังไม่ได้สแกน', emptyText: 'เช็คครบทุกคนแล้ว', showCheckedInfo: false, showContact: true });
+}
+
+// การ์ดยอดรวมด้านบน + ชุดการ์ดนักเรียนแต่ละคนด้านล่าง ใช้ร่วมกันได้ทั้ง 2 โหมด
+function renderStudentRosterScreen_(list, students, opts) {
+  let html = '<div class="card" style="margin:12px 16px;">' +
+    '<div class="count-box" style="width:100%;padding:14px;"><div class="num">' + students.length + '</div><div class="label">' + opts.countLabel + '</div></div>' +
     '</div>';
+
+  if (!students.length) {
+    list.innerHTML = html + '<div class="empty-state">' + opts.emptyText + '</div>';
+    return;
+  }
+
+  html += students.map(s => renderStudentInfoCard_(s, opts)).join('');
+  list.innerHTML = html;
 }
 
-function wireNotScannedStudentCards_(sessionIdx, students) {
-  document.querySelectorAll('#notscanned-body-' + sessionIdx + ' [data-student-toggle]').forEach(el => el.addEventListener('click', () => {
-    const key = el.dataset.studentToggle;
-    const sidx = Number(key.split('-')[1]);
-    const s = students[sidx];
-    const detail = document.getElementById('student-detail-' + key);
-    if (detail.style.display === 'block') { detail.style.display = 'none'; return; }
-    detail.style.display = 'block';
-    detail.innerHTML =
-      (s.note ? '<div class="meta">หมายเหตุ: ' + s.note + '</div>' : '') +
-      (s.phone ? '<div class="meta">เบอร์นักเรียน: <a href="tel:' + s.phone + '" onclick="event.stopPropagation()">' + s.phone + ' — โทร</a></div>' : '') +
-      (s.guardian_phone ? '<div class="meta">เบอร์ผู้ปกครอง: <a href="tel:' + s.guardian_phone + '" onclick="event.stopPropagation()">' + s.guardian_phone + ' — โทร</a></div>' : '') +
-      (!s.phone && !s.guardian_phone ? '<div class="meta">ไม่มีเบอร์โทรในระบบ</div>' : '');
-  }));
+// การ์ดข้อมูลนักเรียนหนึ่งคน — โหมด "สแกนแล้ว" โชว์ว่าใครเช็ค/เมื่อไหร่ โหมด "ยังไม่สแกน" โชว์ปุ่มโทร
+// หานักเรียน/ผู้ปกครองอยู่บนการ์ดเลยไม่ต้องกดขยายอีกที (มาถึงหน้านี้แล้วคือกำลังตามหาคนนี้อยู่พอดี)
+// ปุ่มโทรใช้ .btn (สูง ≥48px) แยกจากพื้นที่การ์ดชัดเจน กันกดโดนผิดจุด
+function renderStudentInfoCard_(s, opts) {
+  let html = '<div class="card" style="margin:12px 16px;">' +
+    '<div class="row1">' + s.name + (s.nickname ? ' (' + s.nickname + ')' : '') + '</div>';
+  if (s.class) html += '<div class="progress">' + s.class + '</div>';
+  if (opts.showCheckedInfo) {
+    html += '<div class="progress">' + ic('check-circle', 'icon-ok') + ' เช็คโดย ' + (s.checked_by_name || '—') +
+      (s.checked_at ? ' · ' + new Date(s.checked_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.' : '') + '</div>';
+  }
+  if (s.note) html += '<div class="progress">หมายเหตุ: ' + s.note + '</div>';
+  if (opts.showContact) {
+    if (s.phone || s.guardian_phone) {
+      html += '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">' +
+        (s.phone ? '<a class="btn btn-secondary" style="flex:1;min-width:140px;" href="tel:' + s.phone + '">โทรนักเรียน · ' + s.phone + '</a>' : '') +
+        (s.guardian_phone ? '<a class="btn btn-secondary" style="flex:1;min-width:140px;" href="tel:' + s.guardian_phone + '">โทรผู้ปกครอง · ' + s.guardian_phone + '</a>' : '') +
+        '</div>';
+    } else {
+      html += '<div class="progress">ไม่มีเบอร์โทรในระบบ</div>';
+    }
+  }
+  html += '</div>';
+  return html;
 }
 
 // ---------------------------------------------------------------------------
@@ -1644,26 +1665,32 @@ async function loadStudentsList_() {
   renderStudentsList_(r.data);
 }
 
+// การ์ดนักเรียนแต่ละคน — แยกโซนชัดเจน 3 ชั้น: identity+status ด้านบน, ข้อมูลติดต่อ/หมายเหตุตรงกลาง
+// (ปุ่มโทรแยกจากพื้นที่การ์ดด้วย .btn ≥44px กันกดโดนผิดจุด), ปุ่มจัดการบัญชีล่างสุด
 function renderStudentsList_(students) {
   const list = document.getElementById('s18-list');
   if (!students.length) { list.innerHTML = '<div class="empty-state">ไม่พบนักเรียน</div>'; return; }
   const isSuperAdmin = !!(state.profile && state.profile.level === 100);
 
   list.innerHTML = students.map(s => (
-    '<div class="roster-row" style="flex-direction:column;align-items:stretch;gap:6px;">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-    '<div><div class="name">' + s.name + (s.nickname ? ' (' + s.nickname + ')' : '') + '</div>' +
-    '<div class="meta">' + [s.student_code, s.class].filter(Boolean).join(' · ') + '</div>' +
-    (s.phone ? '<div class="meta">โทร: <a href="tel:' + s.phone + '">' + s.phone + '</a></div>' : '') +
-    (s.guardian_phone ? '<div class="meta">ผู้ปกครอง' + (s.guardian_name ? ' ' + s.guardian_name : '') + ': <a href="tel:' + s.guardian_phone + '">' + s.guardian_phone + '</a></div>' : '') +
-    (s.note ? '<div class="meta">หมายเหตุ: ' + s.note + '</div>' : '') +
-    '</div>' +
+    '<div class="card" style="margin:10px 16px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">' +
+    '<div class="card-title" style="margin:0;">' + s.name + (s.nickname ? ' (' + s.nickname + ')' : '') + '</div>' +
     '<span class="status-badge ' + (s.status === 'ACTIVE' ? 'badge-open' : 'badge-none') + '">' + (s.status === 'ACTIVE' ? 'ใช้งานอยู่' : 'ระงับ') + '</span>' +
     '</div>' +
-    '<div style="display:flex;gap:8px;">' +
-    '<button class="btn btn-secondary" style="flex:1;min-height:36px;padding:6px 10px;font-size:13px;" data-toggle-student="' + s.student_id + '" data-current-status="' + s.status + '">' +
+    '<div class="progress">' + [s.student_code, s.class].filter(Boolean).join(' · ') + '</div>' +
+    (s.guardian_name ? '<div class="progress">ผู้ปกครอง: ' + s.guardian_name + '</div>' : '') +
+    (s.note ? '<div class="progress">หมายเหตุ: ' + s.note + '</div>' : '') +
+    (s.phone || s.guardian_phone
+      ? '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">' +
+        (s.phone ? '<a class="btn btn-secondary" style="flex:1;min-width:130px;" href="tel:' + s.phone + '">โทรนักเรียน · ' + s.phone + '</a>' : '') +
+        (s.guardian_phone ? '<a class="btn btn-secondary" style="flex:1;min-width:130px;" href="tel:' + s.guardian_phone + '">โทรผู้ปกครอง · ' + s.guardian_phone + '</a>' : '') +
+        '</div>'
+      : '') +
+    '<div style="display:flex;gap:8px;margin-top:10px;">' +
+    '<button class="btn btn-secondary" style="flex:1;" data-toggle-student="' + s.student_id + '" data-current-status="' + s.status + '">' +
     (s.status === 'ACTIVE' ? 'ระงับ' : 'เปิดใช้งานอีกครั้ง') + '</button>' +
-    (isSuperAdmin ? '<button class="btn btn-danger" style="min-height:36px;padding:6px 10px;font-size:13px;" data-delete-student="' + s.student_id + '" data-name="' + s.name + '">เก็บเข้าประวัติ</button>' : '') +
+    (isSuperAdmin ? '<button class="btn btn-danger" data-delete-student="' + s.student_id + '" data-name="' + s.name + '">เก็บเข้าประวัติ</button>' : '') +
     '</div>' +
     '</div>'
   )).join('');

@@ -336,8 +336,10 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; touc
 }
 .round-item-actions.archive-zone, .round-item-actions.restore-zone { background: var(--color-primary); }
 .round-item.archive-zone-bg { background: var(--color-primary); }
-.round-item .row1 { display: flex; align-items: center; gap: 8px; font-weight: 700; }
-.round-item .status-badge {
+/* .row1/.progress/.status-badge/.warn เป็นคลาสกลางที่ใช้ร่วมกันในการ์ดหลายแบบทั่วแอพ (.round-item เดิม,
+   .card ของ S-07/S-25/S-18 ฯลฯ) เลยประกาศเป็น top-level ไม่ผูกกับ .round-item อีกต่อไป */
+.row1 { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.status-badge {
   padding: 2px 10px; border-radius: 999px; font-size: 1em; font-weight: 700; color: #fff;
   background: var(--color-absent-badge); white-space: nowrap;
   box-shadow: 0 1px 4px -1px rgba(0,0,0,0.3);
@@ -349,8 +351,8 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; touc
 .status-badge.badge-open { background: var(--color-board-badge); }
 .status-badge.badge-closed { background: var(--color-primary-badge); }
 .status-badge.badge-none { background: var(--color-absent-badge); }
-.round-item .progress { color: var(--text-muted); font-size: var(--text-sm); margin-top: 4px; }
-.round-item .warn { color: var(--color-duplicate-text); font-size: var(--text-sm); margin-top: 4px; font-weight: 600; }
+.progress { color: var(--text-muted); font-size: var(--text-sm); margin-top: 4px; }
+.warn { color: var(--color-duplicate-text); font-size: var(--text-sm); margin-top: 4px; font-weight: 600; }
 
 /* ---------- S-03 Scan screen ---------- */
 .scan-topbar {
