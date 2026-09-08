@@ -591,7 +591,7 @@ async function enterCourseAsAdmin_(courseId) {
   state.permissions = r.data.permissions || [];
   state.selectedCourseId = courseId;
   state.isSuperAdmin = false; // session ตอนนี้ผูกกับหลักสูตรนี้แล้ว ไม่ใช่ session global อีกต่อไป
-  renderHomeFromData_({ profile: r.data.profile, tiles: r.data.home.tiles });
+  renderHomeFromData_({ profile: r.data.profile, tiles: r.data.home.tiles, notices: r.data.home.notices });
   showScreen('S-01');
 }
 
@@ -797,6 +797,19 @@ function renderHomeFromData_(data) {
   document.getElementById('s01-avatar').innerHTML = data.profile.picture
     ? '<img src="' + data.profile.picture + '" alt="">'
     : '<svg class="icon"><use href="#i-user"/></svg>';
+
+  // แบนเนอร์เด่นๆ บนสุด (เช่น "มี N รายการรอการอนุมัติ") แทนการให้ผู้ใช้ต้องสังเกตตัวเลขเล็กๆ บนไอคอนเอง
+  const noticesWrap = document.getElementById('s01-notices');
+  if (noticesWrap) {
+    noticesWrap.innerHTML = (data.notices || []).map(n => (
+      '<div class="card" data-notice-route="' + (n.route || '') + '" style="margin:12px 16px 0;background:rgba(241,196,15,0.16);border:1px solid var(--color-duplicate);color:var(--text);cursor:pointer;font-weight:700;">' +
+      n.message + (n.route ? ' →' : '') +
+      '</div>'
+    )).join('');
+    noticesWrap.querySelectorAll('[data-notice-route]').forEach(el => el.addEventListener('click', () => {
+      if (el.dataset.noticeRoute) navigateTile_(el.dataset.noticeRoute);
+    }));
+  }
 
   const tilesWrap = document.getElementById('s01-tiles');
   tilesWrap.innerHTML = data.tiles.map(t => (
@@ -1078,7 +1091,9 @@ function renderSessionBusCards_(rounds, opts) {
       (round.status === 'OPEN' && canClose ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-round="' + round.round_id + '">ปิดรอบ</button>' : '') +
       (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
       (isClosed && canCloseTrip && round.trip_id ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-trip="' + round.trip_id + '">ปิดเที่ยวรถ</button>' : '') +
-      ((round.status === 'OPEN' || isClosed) ? '<button class="btn btn-secondary" style="margin-top:8px" data-view-roster="' + round.round_id + '">ดูรายชื่อ</button>' : '') +
+      // "ดูรายชื่อ" ต้องมีเฉพาะเมื่อผังที่นั่งใช้ได้จริงเท่านั้น (รอบผูกกับรถคันเดียว) — รอบที่ไม่ผูกรถ
+      // ไม่มีผังที่นั่งให้ดู จึงไม่ควรมีปุ่มนี้ค้างไว้ให้สับสน
+      ((round.status === 'OPEN' || isClosed) && round.scope_type === 'BUS' && round.scope_id ? '<button class="btn btn-secondary" style="margin-top:8px" data-view-roster="' + round.round_id + '">ดูรายชื่อ</button>' : '') +
       ((isPlanned || round.status === 'OPEN') && canEdit ? '<button class="btn btn-secondary" style="margin-top:8px" data-edit="' + round.round_id + '">แก้ไข</button>' : '') +
       (canManage && archivedList ? '<button class="btn btn-danger" style="margin-top:8px" data-delete-permanent="' + round.round_id + '">ลบถาวร</button>' : '') +
       '<div class="blocker-list" id="blockers-' + round.round_id + '"></div>' +
@@ -1413,8 +1428,13 @@ function wireSeatDrag_(grid) {
       picked = false; moved = false;
     }
 
+    // preventDefault ตั้งแต่ pointerdown ทุกครั้ง (ต้องลงทะเบียน {passive:false} ถึงจะมีผลจริง) —
+    // กันเบราว์เซอร์ตีความการกดค้างเป็น "เลือกข้อความ"/เปิดเมนู copy เอง ซึ่ง user-select:none ใน CSS
+    // อย่างเดียวเอาไม่อยู่ในบางเบราว์เซอร์ (ตัวกดติ๊กเองก็ไม่ได้พึ่ง native click event อยู่แล้ว จึง
+    // preventDefault ได้เต็มที่โดยไม่กระทบการติ๊ก)
     el.addEventListener('pointerdown', (e) => {
       if (e.target.closest('[data-seat-unassign]') || e.target.closest('[data-seat-transfer]')) return;
+      if (e.cancelable) e.preventDefault();
       startX = e.clientX; startY = e.clientY;
       el.setPointerCapture(e.pointerId);
       longPressTimer = setTimeout(() => {
@@ -1423,9 +1443,10 @@ function wireSeatDrag_(grid) {
         el.style.pointerEvents = 'none';
         if (navigator.vibrate) navigator.vibrate(15);
       }, LONG_PRESS_MS);
-    });
+    }, { passive: false });
     el.addEventListener('pointermove', (e) => {
       if (!el.hasPointerCapture(e.pointerId)) return;
+      if (e.cancelable) e.preventDefault();
       const dx = e.clientX - startX, dy = e.clientY - startY;
       if (!picked) {
         if (Math.hypot(dx, dy) > MOVE_CANCEL_THRESHOLD) clearTimer_(); // ขยับก่อนกดค้างครบเวลา ไม่นับเป็นลาก
@@ -1437,7 +1458,8 @@ function wireSeatDrag_(grid) {
       const overSeat = overEl && overEl.closest && overEl.closest('.seat');
       if (lastOver && lastOver !== overSeat) lastOver.classList.remove('drop-target');
       if (overSeat && overSeat !== el) { overSeat.classList.add('drop-target'); lastOver = overSeat; } else { lastOver = null; }
-    });
+    }, { passive: false });
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
     el.addEventListener('pointerup', guardClick_(async (e) => {
       if (!el.hasPointerCapture(e.pointerId)) return;
       el.releasePointerCapture(e.pointerId);
