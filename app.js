@@ -1074,8 +1074,7 @@ function renderSessionBusCards_(rounds, opts) {
       '<div class="progress">' + checkers + '</div>' +
       (isPlanned && !archivedList && isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
       (isPlanned && !archivedList && !isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-wait-open="1">รอเปิด</button>' : '') +
-      (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
-      (round.scope_type === 'BUS' && round.scope_id ? '<button class="btn btn-secondary" style="margin-top:8px" data-seatmap="' + round.round_id + '">ผังที่นั่ง</button>' : '') +
+      (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '" data-enter-bus="' + (round.scope_type === 'BUS' && round.scope_id ? '1' : '0') + '">เช็คต่อ →</button>' : '') +
       (round.status === 'OPEN' && canClose ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-round="' + round.round_id + '">ปิดรอบ</button>' : '') +
       (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
       (isClosed && canCloseTrip && round.trip_id ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-trip="' + round.trip_id + '">ปิดเที่ยวรถ</button>' : '') +
@@ -1104,8 +1103,12 @@ function renderSessionBusCards_(rounds, opts) {
     await afterChange();
   })));
   list.querySelectorAll('[data-wait-open]').forEach(btn => btn.addEventListener('click', () => toast('รอ Super Admin เปิดรอบรถ')));
-  list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
-  list.querySelectorAll('[data-seatmap]').forEach(btn => btn.addEventListener('click', () => enterSeatMap_(btn.dataset.seatmap)));
+  // รอบผูกกับรถคันเดียว (BOARD/DROP ปกติ) → "เช็คต่อ" พาไปหน้าผังที่นั่งแทนหน้าสแกน QR (บรรจุ/ติ๊ก
+  // ได้ในหน้าเดียว ไม่ต้องมีปุ่มผังที่นั่งแยกอีกปุ่มให้ซ้ำซ้อน) — รอบที่ไม่ผูกรถ (เช่น นับยอดทั้งโรงเรียน)
+  // ยังต้องใช้หน้าสแกน QR แบบเดิม เพราะผังที่นั่งใช้กับรอบแบบนี้ไม่ได้
+  list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.dataset.enterBus === '1') enterSeatMap_(btn.dataset.enter); else enterScanScreen_(btn.dataset.enter);
+  }));
   list.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.edit])));
   // ดูรายชื่อ — เปิดหน้ารายชื่อ (S-04) ตรงจากการ์ดรอบนี้เลย ไม่ต้องเข้าโหมดสแกนก่อน ย้อนกลับมาที่หน้านี้ได้
   list.querySelectorAll('[data-view-roster]').forEach(btn => btn.addEventListener('click', () => {
@@ -1350,6 +1353,7 @@ function renderSeatGrid_(data) {
   })));
   grid.querySelectorAll('[data-seat-remove-position]').forEach(el => el.addEventListener('click', guardClick_(async (e) => {
     e.stopPropagation();
+    if (!confirm('ลบที่นั่งนี้ออกจากผังถาวร?')) return;
     const r = await api('bus.seatLayoutRemoveSeat', { busId: state.currentSeatBusId, seatId: e.currentTarget.dataset.seatRemovePosition });
     if (!r.ok) { toast(r.error.message); return; }
     await loadSeatMap_();
@@ -1439,7 +1443,7 @@ function openSeatAssignDialog_(seatId) {
   state.seatAssignTarget = { seatId };
   document.getElementById('seat-assign-search').value = '';
   document.getElementById('seat-assign-results').innerHTML = '';
-  ['seat-new-fullname', 'seat-new-nickname', 'seat-new-classlevel', 'seat-new-room', 'seat-new-guardianphone'].forEach(id => { document.getElementById(id).value = ''; });
+  ['seat-new-fullname', 'seat-new-nickname', 'seat-new-phone', 'seat-new-note'].forEach(id => { document.getElementById(id).value = ''; });
   switchSeatAssignTab_('search');
   document.getElementById('dlg-seat-assign').classList.add('show');
   document.getElementById('seat-assign-search').focus();
@@ -1521,17 +1525,15 @@ async function onSeatQrDecoded_(rawQr) {
 
 onClickGuarded_('btn-seat-new-submit', async () => {
   const fullName = document.getElementById('seat-new-fullname').value.trim();
-  const classLevel = document.getElementById('seat-new-classlevel').value.trim();
-  const room = document.getElementById('seat-new-room').value.trim();
-  const guardianPhone = document.getElementById('seat-new-guardianphone').value.trim();
-  if (!fullName || !classLevel || !room || !guardianPhone) { toast('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
+  const phone = document.getElementById('seat-new-phone').value.trim();
+  if (!fullName || !phone) { toast('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
   const seatId = state.seatAssignTarget && state.seatAssignTarget.seatId;
   if (!seatId) return;
 
   const created = await api('student.quickCreate', {
     fullName: fullName, nickname: document.getElementById('seat-new-nickname').value.trim(),
-    classLevel: classLevel, room: room, guardianPhone: guardianPhone,
-    busId: state.currentSeatBusId, roundId: state.currentSeatRoundId
+    phone: phone, note: document.getElementById('seat-new-note').value.trim(),
+    roundId: state.currentSeatRoundId
   });
   if (!created.ok) { toast(created.error.message); return; }
 

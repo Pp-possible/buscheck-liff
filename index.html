@@ -8,7 +8,7 @@
      บนมือถือ cache ไฟล์ static พวกนี้แน่นมาก แก้โค้ดแล้ว deploy ขึ้นจริงแล้วแต่ผู้ใช้ยังเห็นของเก่าอยู่ได้
      ทุกครั้งที่แก้ styles.css/app.js/config.js แล้วต้องการให้มือถือดึงของใหม่ทันที ต้องขยับเลขวันที่นี้ขึ้น
      (เปลี่ยน query string ทำให้ browser มองเป็นคนละไฟล์ ข้าม cache เก่าไปเลย ไม่ต้องรอ revalidate) -->
-<link rel="stylesheet" href="styles.css?v=20260908d">
+<link rel="stylesheet" href="styles.css?v=20260908e">
 <script>
   // ตัวจับ error ถาวร — โชว์ error ตรงจอเลยเมื่อมีปัญหาจริงเท่านั้น (ปกติจะไม่ขึ้นอะไร)
   // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้ เวลามีปัญหาจะได้เห็นสาเหตุจากภาพหน้าจอผู้ใช้ได้เลย
@@ -792,13 +792,10 @@
     </div>
 
     <div id="seat-assign-panel-new" style="display:none;margin:10px 0;">
-      <div class="field" style="margin:0 0 10px;"><label>ชื่อ-นามสกุล *</label><input id="seat-new-fullname" type="text"></div>
+      <div class="field" style="margin:0 0 10px;"><label>ชื่อ-สกุล *</label><input id="seat-new-fullname" type="text"></div>
       <div class="field" style="margin:0 0 10px;"><label>ชื่อเล่น</label><input id="seat-new-nickname" type="text"></div>
-      <div style="display:flex;gap:10px;">
-        <div class="field" style="flex:1;margin:0 0 10px;"><label>ระดับชั้น *</label><input id="seat-new-classlevel" type="text" placeholder="เช่น ป.4"></div>
-        <div class="field" style="flex:1;margin:0 0 10px;"><label>ห้อง *</label><input id="seat-new-room" type="text" placeholder="เช่น 1"></div>
-      </div>
-      <div class="field" style="margin:0 0 10px;"><label>เบอร์ผู้ปกครอง *</label><input id="seat-new-guardianphone" type="tel"></div>
+      <div class="field" style="margin:0 0 10px;"><label>เบอร์โทร *</label><input id="seat-new-phone" type="tel"></div>
+      <div class="field" style="margin:0 0 10px;"><label>หมายเหตุ</label><input id="seat-new-note" type="text"></div>
       <button class="btn btn-primary btn-block" id="btn-seat-new-submit">เพิ่ม + ลงที่นั่งนี้</button>
     </div>
 
@@ -866,7 +863,7 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" onerror="showDebug_('โหลด LIFF SDK ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="showDebug_('โหลด html5-qrcode ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="showDebug_('โหลด qrcodejs ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
-<script src="config.js?v=20260908d"></script>
-<script src="app.js?v=20260908d"></script>
+<script src="config.js?v=20260908e"></script>
+<script src="app.js?v=20260908e"></script>
 </body>
 </html>
