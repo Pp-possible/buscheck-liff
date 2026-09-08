@@ -8,7 +8,7 @@
      บนมือถือ cache ไฟล์ static พวกนี้แน่นมาก แก้โค้ดแล้ว deploy ขึ้นจริงแล้วแต่ผู้ใช้ยังเห็นของเก่าอยู่ได้
      ทุกครั้งที่แก้ styles.css/app.js/config.js แล้วต้องการให้มือถือดึงของใหม่ทันที ต้องขยับเลขวันที่นี้ขึ้น
      (เปลี่ยน query string ทำให้ browser มองเป็นคนละไฟล์ ข้าม cache เก่าไปเลย ไม่ต้องรอ revalidate) -->
-<link rel="stylesheet" href="styles.css?v=20260903k">
+<link rel="stylesheet" href="styles.css?v=20260908b">
 <script>
   // ตัวจับ error ถาวร — โชว์ error ตรงจอเลยเมื่อมีปัญหาจริงเท่านั้น (ปกติจะไม่ขึ้นอะไร)
   // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้ เวลามีปัญหาจะได้เห็นสาเหตุจากภาพหน้าจอผู้ใช้ได้เลย
@@ -182,14 +182,41 @@
 
   <div class="offline-banner" id="offline-banner"></div>
 
+  <!-- ============ S-00e เลือกหลักสูตร (ทางเข้าแรกของทุกคนที่ไม่ใช่ Super Admin) ============ -->
+  <section class="screen" data-screen="S-00e">
+    <div class="hero">
+      <div style="font-size:40px;"><svg class="icon"><use href="#i-bus"/></svg></div>
+      <h1>BusCheck</h1>
+      <p>เลือกหลักสูตร/ทริปที่จะเข้าใช้งาน</p>
+    </div>
+    <div class="sync-indicator" id="s00e-sync"></div>
+    <div id="s00e-list"></div>
+  </section>
+
+  <!-- ============ S-00f จัดการหลักสูตร (Super Admin เท่านั้น — ทางเข้าแรกแทน S-00e) ============ -->
+  <section class="screen" data-screen="S-00f">
+    <div class="topbar">
+      <h1 class="title">จัดการหลักสูตร</h1>
+      <button class="back" id="btn-logout-s00f" title="ออกจากระบบ" aria-label="ออกจากระบบ"><svg class="icon"><use href="#i-log-out"/></svg></button>
+    </div>
+    <div style="padding:12px 16px;">
+      <button class="btn btn-primary btn-block" id="btn-add-course">+ หลักสูตร</button>
+    </div>
+    <div id="s00f-list"></div>
+  </section>
+
   <!-- ============ S-00a เลือกประเภท ============ -->
   <section class="screen" data-screen="S-00a">
+    <div class="topbar">
+      <button class="back" data-back="S-00e" aria-label="ย้อนกลับ">←</button>
+      <h1 class="title" id="s00a-course-name"></h1>
+    </div>
     <div class="reg-steps" id="s00a-steps"></div>
     <div class="hero">
       <div style="font-size:40px;"><svg class="icon"><use href="#i-bus"/></svg></div>
       <h1>BusCheck</h1>
       <p>ระบบเช็คยอดนักเรียนบนรถ</p>
-      <p id="s00a-hint">ยังไม่พบบัญชีของคุณในระบบ<br>กรุณาเลือกประเภทการลงทะเบียน</p>
+      <p id="s00a-hint">ยังไม่พบบัญชีของคุณในหลักสูตรนี้<br>กรุณาเลือกประเภทการลงทะเบียน</p>
     </div>
     <button class="choice-btn" id="btn-reg-teacher" style="display:none">
       <span class="icon-wrap"><svg class="icon"><use href="#i-briefcase"/></svg></span>
@@ -718,12 +745,26 @@
   </div>
 </div>
 
+<div class="overlay" id="dlg-course-create">
+  <div class="dialog">
+    <h3>สร้างหลักสูตรใหม่</h3>
+    <div class="field" style="margin:0 0 10px;">
+      <label>ชื่อหลักสูตร/ทริป *</label>
+      <input id="cc-name" type="text" placeholder="เช่น ดูงานความมั่นคง 1">
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="dlg-course-cancel">ยกเลิก</button>
+      <button class="btn btn-primary" id="dlg-course-save">สร้าง</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" onerror="showDebug_('โหลด LIFF SDK ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="showDebug_('โหลด html5-qrcode ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="showDebug_('โหลด qrcodejs ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
-<script src="config.js?v=20260903k"></script>
-<script src="app.js?v=20260903k"></script>
+<script src="config.js?v=20260908b"></script>
+<script src="app.js?v=20260908b"></script>
 </body>
 </html>

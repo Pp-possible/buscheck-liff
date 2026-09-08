@@ -135,7 +135,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; touc
 
 #app { max-width: 480px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
 
-.screen { display: none; flex: 1; flex-direction: column; padding-bottom: 24px; }
+.screen { display: none; flex: 1; flex-direction: column; padding-bottom: 24px; touch-action: pan-y; }
 .screen.active { display: flex; }
 
 /* ---------- Top bar ---------- */

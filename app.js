@@ -37,7 +37,10 @@ const state = {
   html5QrVouch: null,
   scanHistory: {},  // clientEventId -> true, กันยิงซ้ำเร็วเกินไปจากกล้อง
   bootReady: false, // true เมื่อ auth.bootstrap ผ่านแล้วจริง (ก่อนหน้านี้หน้าจออาจวาดจากแคชไปก่อน)
-  pendingRoute: null
+  pendingRoute: null,
+  isSuperAdmin: false,     // true = session แบบ global ของ Super Admin (ยังไม่ได้เข้าหลักสูตรไหน)
+  selectedCourseId: null,  // หลักสูตรที่เลือก/เข้าใช้งานอยู่ตอนนี้
+  selectedCourseName: ''
 };
 
 // ---------------------------------------------------------------------------
@@ -166,19 +169,118 @@ function formatThaiDateTime_(scheduledAt) {
 // Router
 // ---------------------------------------------------------------------------
 
-function showScreen(name) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+function showScreen(name, opts) {
+  opts = opts || {};
+  document.querySelectorAll('.screen').forEach(s => {
+    const isActive = s.dataset.screen === name;
+    s.classList.toggle('active', isActive);
+    if (isActive) { s.style.transition = ''; s.style.transform = ''; s.style.opacity = ''; } // เคลียร์ inline style ที่อาจค้างจากท่าปัดขวาย้อนกลับ
+  });
   window.scrollTo(0, 0);
   if (name !== 'S-03' && state.html5Qr) stopScanCamera_();
   if (name !== 'S-00b' && state.html5QrVouch) stopVouchCamera_();
   if (name !== 'S-19' && state.vouchTimer) { clearInterval(state.vouchTimer); state.vouchTimer = null; }
   if (name !== 'S-21' && name !== 'S-00d' && state.studentQrTimer) { clearInterval(state.studentQrTimer); state.studentQrTimer = null; }
+  // พก history ของแต่ละหน้าไว้เสมอ (ยกเว้นตอน sync จาก popstate เอง) กัน LIFF ตีความปัดขวาเป็น "ปิดหน้าต่าง" เพราะไม่มี history ให้ย้อน
+  if (!opts.viaHistory && (!history.state || history.state.screen !== name)) {
+    history.pushState({ screen: name }, '', '#' + name);
+  }
 }
+
+function canGoBack_() {
+  const active = document.querySelector('.screen.active');
+  return !!(active && active.querySelector('[data-back]'));
+}
+
+// ย้อนกลับหน้าก่อนหน้าจริง (ผ่าน browser history) แทนการ showScreen ตรงๆ
+// เพื่อไม่ให้ปุ่มย้อนกลับสร้าง history entry ใหม่ทับไปเรื่อยๆ จนกดย้อนกลับซ้ำแล้ววนกลับไปหน้าเดิม
+function goBack_() {
+  if (!canGoBack_()) return false;
+  history.back();
+  return true;
+}
+
+window.addEventListener('popstate', (e) => {
+  const target = e.state && e.state.screen;
+  if (target) showScreen(target, { viaHistory: true });
+});
 
 document.addEventListener('click', (e) => {
   const back = e.target.closest('[data-back]');
-  if (back) showScreen(back.dataset.back);
+  if (back) goBack_();
 });
+
+// ---------------------------------------------------------------------------
+// ปัดขวาจากขอบจอเพื่อย้อนกลับ (edge swipe-back) — เดิมปัดขวาแล้ว LIFF ปิดตัวเองเลย
+// เพราะไม่มี history ให้ย้อน ตอนนี้ประกาศ pan-y ใน CSS ให้ JS นี้ควบคุมท่าปัดแนวนอนเอง
+// ---------------------------------------------------------------------------
+(function initSwipeBack_() {
+  const EDGE_ZONE = 24;   // px จากขอบซ้ายที่เริ่มจับท่าปัดได้ (ตามธรรมเนียม native app)
+  const THRESHOLD = 90;   // px ที่ต้องลากผ่านถึงจะถือว่าตั้งใจย้อนกลับ ไม่ใช่แค่แตะเลื่อน
+  let tracking = false, engaged = false, startX = 0, startY = 0, dx = 0, activeEl = null;
+
+  function snapBack_() {
+    if (activeEl) {
+      const el = activeEl;
+      el.style.transition = 'transform .2s var(--ease-out), opacity .2s var(--ease-out)';
+      el.style.transform = 'translateX(0)';
+      el.style.opacity = '1';
+      setTimeout(() => { el.style.transition = ''; el.style.transform = ''; el.style.opacity = ''; }, 210);
+    }
+    tracking = false; engaged = false; activeEl = null; dx = 0;
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if (t.clientX > EDGE_ZONE) return;
+    if (document.querySelector('.overlay.show')) return; // มี dialog เปิดอยู่ ไม่ต้องแย่งท่าปัด
+    if (e.target.closest('.topbar .back')) return; // แตะปุ่มย้อนกลับเอง ให้ tap ทำงานตามปกติ
+    if (!canGoBack_()) return; // หน้านี้ไม่มีปุ่มย้อนกลับ = อยู่หน้าแรกของกลุ่ม ไม่ต้องรับท่าปัด
+    tracking = true; engaged = false;
+    startX = t.clientX; startY = t.clientY; dx = 0;
+    activeEl = document.querySelector('.screen.active');
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!tracking) return;
+    const t = e.touches[0];
+    dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if (!engaged) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (Math.abs(dy) > Math.abs(dx) || dx < 0) { tracking = false; return; } // ปัดแนวตั้งหรือปัดซ้าย ปล่อยให้ scroll ปกติ
+      engaged = true;
+      if (activeEl) activeEl.style.transition = 'none';
+    }
+    if (e.cancelable) e.preventDefault();
+    const clamped = Math.min(dx, window.innerWidth);
+    if (activeEl) {
+      activeEl.style.transform = 'translateX(' + clamped + 'px)';
+      activeEl.style.opacity = String(Math.max(1 - (clamped / window.innerWidth) * 0.6, 0.4));
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', () => {
+    if (!tracking) return;
+    if (engaged && dx > THRESHOLD) {
+      const el = activeEl;
+      tracking = false; engaged = false; activeEl = null; dx = 0;
+      if (el) {
+        el.style.transition = 'transform .18s var(--ease-out), opacity .18s var(--ease-out)';
+        el.style.transform = 'translateX(100%)';
+        el.style.opacity = '0';
+        setTimeout(() => goBack_(), 180);
+      } else {
+        goBack_();
+      }
+    } else {
+      snapBack_();
+    }
+  });
+
+  document.addEventListener('touchcancel', snapBack_);
+})();
 
 // ---------------------------------------------------------------------------
 // api() — ทุก request เป็น POST, Content-Type: text/plain;charset=utf-8 (N10)
@@ -292,14 +394,9 @@ async function boot() {
   // เจาะจงจะได้ไม่ต้องเห็นหน้า home วาบขึ้นมาก่อนเด้งไปหน้าที่ต้องการ
   state.pendingRoute = deepLinkRoute_();
 
-  // วาดหน้าแรกจากแคชทันที (ถ้าเคยเปิดสำเร็จมาก่อน) ก่อนรอ LIFF/เซิร์ฟเวอร์เลย — ข้ามขั้นนี้ถ้ามี
-  // ลิงก์เจาะจงหน้าอยู่แล้ว เพราะปลายทางจริงไม่ใช่หน้าแรก ไม่ต้องวาดหน้าแรกให้เสียเวลา/วาบจอ
-  const cachedHome = cacheGet_('home');
-  if (cachedHome && cachedHome.data && !state.pendingRoute) {
-    renderHomeFromData_(cachedHome.data);
-    setSyncBadge_('s01-sync', 'cache', cachedHome.cachedAt);
-    showScreen('S-01');
-  }
+  // หมายเหตุ: ตัดการวาดหน้าแรกจากแคชทันที (เดิมวาด S-01 จาก cache ก่อนรู้ auth state) ออกไปแล้ว —
+  // ตอนนี้ทุกคน (ยกเว้น Super Admin) ต้องผ่านหน้าเลือกหลักสูตร (S-00e) ก่อนเสมอ วาด S-01 ทันทีจะกลาย
+  // เป็นวาบไปมาระหว่างหน้าแรกกับหน้าเลือกหลักสูตรซึ่งสับสนกว่าการรอสักครู่แล้วไปหน้าที่ถูกต้องเลย
 
   try {
     let idToken;
@@ -311,49 +408,40 @@ async function boot() {
       // ตอน redirect ผ่านหน้า login) เช็คซ้ำอีกทีเผื่อรอบแรกจาก location.search เพียวๆ ยังไม่เจอ
       if (!state.pendingRoute) state.pendingRoute = deepLinkRoute_();
     } catch (e) {
-      if (!cachedHome) toast('เปิดผ่าน LINE เท่านั้น กรุณาเปิดลิงก์นี้ในแอพ LINE');
-      else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
+      toast('เปิดผ่าน LINE เท่านั้น กรุณาเปิดลิงก์นี้ในแอพ LINE');
       return;
     }
     if (!idToken) {
-      if (!cachedHome) toast('ยืนยันตัวตนไม่สำเร็จ กรุณาเปิดแอพใหม่');
+      toast('ยืนยันตัวตนไม่สำเร็จ กรุณาเปิดแอพใหม่');
       return;
     }
 
     const r = await api('auth.bootstrap', { idToken: idToken });
     if (!r.ok) {
       if (r.error.code === 'E_PENDING_APPROVAL') { toast(r.error.message); return; }
-      if (!cachedHome) toast(r.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
-      else { toast('เชื่อมต่อไม่ได้ กำลังแสดงข้อมูลล่าสุดที่บันทึกไว้'); setSyncBadge_('s01-sync', 'error'); }
+      toast(r.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
       return;
     }
 
     state.permVersion = r.permVersion;
 
-    if (!r.data.known) {
-      renderGateModes_(r.data.gateModes);
-      showScreen('S-00a');
+    if (r.data.isSuperAdmin) {
+      // Super Admin เป็น global เสมอ — ข้ามหน้าเลือกหลักสูตรไปเจอหน้าจัดการหลักสูตรตรง ๆ
+      state.sessionToken = r.data.sessionToken;
+      state.persona = 'STAFF';
+      state.profile = r.data.profile;
+      state.permissions = r.data.permissions || [];
+      state.isSuperAdmin = true;
+      state.bootReady = true;
+      showScreen('S-00f');
+      loadCourseManagement_();
       return;
     }
 
-    applySession_(r.data);
+    // ไม่ใช่ Super Admin — ต้องเลือกหลักสูตรก่อนเสมอ (ไม่มีทางลัดข้าม แม้เคยเลือกมาก่อนแล้วก็ตาม)
     state.bootReady = true;
-
-    if (state.persona === 'STUDENT') {
-      showScreen('S-21');
-      loadStudentHome_();
-    } else if (state.pendingRoute) {
-      // มีลิงก์เจาะจงหน้า — ไปหน้านั้นตรง ๆ เลย ไม่ต้องผ่านหน้าแรกให้เห็นวาบก่อน แต่ยังโหลดข้อมูล
-      // หน้าแรกเงียบ ๆ อยู่เบื้องหลังไว้ด้วย (renderHome_ ไม่เรียก showScreen) กันหน้าแรกว่างเปล่า
-      // ตอนกดย้อนกลับจากหน้าที่ลิงก์พาไป
-      const route = state.pendingRoute;
-      state.pendingRoute = null;
-      navigateTile_(route);
-      renderHome_({ silent: true });
-    } else {
-      showScreen('S-01');
-      renderHome_({ silent: !!cachedHome });
-    }
+    showScreen('S-00e');
+    loadCoursePicker_();
   } finally {
     window.__buscheckBootReady = true;
   }
@@ -371,10 +459,147 @@ function renderGateModes_(modes) {
   document.getElementById('btn-reg-student').style.display = modes.sponsorQr ? 'block' : 'none';
 }
 
-document.getElementById('btn-logout').addEventListener('click', () => {
+function doLogout_() {
   state.sessionToken = null;
   try { liff.logout(); } catch (e) {}
   location.reload();
+}
+document.getElementById('btn-logout').addEventListener('click', doLogout_);
+document.getElementById('btn-logout-s00f').addEventListener('click', doLogout_);
+
+// ---------------------------------------------------------------------------
+// S-00e/S-00f — เลือกหลักสูตร (ผู้ใช้ทั่วไป) / จัดการหลักสูตร (Super Admin)
+// ---------------------------------------------------------------------------
+
+async function loadCoursePicker_() {
+  setSyncBadge_('s00e-sync', 'loading');
+  const r = await api('course.listPublic', {});
+  if (!r.ok) {
+    setSyncBadge_('s00e-sync', 'error');
+    document.getElementById('s00e-list').innerHTML = '<div class="empty-state">' + r.error.message + '</div>';
+    return;
+  }
+  setSyncBadge_('s00e-sync', 'fresh', Date.now());
+  renderCoursePickerList_(r.data);
+}
+
+function renderCoursePickerList_(courses) {
+  const el = document.getElementById('s00e-list');
+  if (!courses.length) {
+    el.innerHTML = '<div class="empty-state">ยังไม่มีหลักสูตรเปิดใช้งาน กรุณาติดต่อผู้ดูแลระบบ</div>';
+    return;
+  }
+  el.innerHTML = courses.map(c => (
+    '<div class="roster-row" data-course="' + c.course_id + '" data-course-name="' + c.course_name + '">' +
+    '<div><div class="name">' + c.course_name + '</div></div></div>'
+  )).join('');
+  el.querySelectorAll('[data-course]').forEach(row => {
+    row.addEventListener('click', guardClick_(() => enterCourse_(row.dataset.course, row.dataset.courseName)));
+  });
+}
+
+async function enterCourse_(courseId, courseName) {
+  let idToken;
+  try { idToken = liff.getIDToken(); } catch (e) { idToken = null; }
+  if (!idToken) { toast('ยืนยันตัวตนไม่สำเร็จ กรุณาเปิดแอพใหม่'); return; }
+
+  const r = await api('course.enter', { idToken: idToken, courseId: courseId });
+  if (!r.ok) {
+    if (r.error.code === 'E_PENDING_APPROVAL') { toast(r.error.message); return; }
+    toast(r.error.message || 'เข้าหลักสูตรไม่สำเร็จ');
+    return;
+  }
+  state.permVersion = r.permVersion;
+  state.selectedCourseId = courseId;
+  state.selectedCourseName = courseName || '';
+
+  if (!r.data.known) {
+    document.getElementById('s00a-course-name').textContent = state.selectedCourseName;
+    renderGateModes_(r.data.gateModes);
+    showScreen('S-00a');
+    return;
+  }
+
+  applySession_(r.data);
+  if (state.persona === 'STUDENT') {
+    showScreen('S-21');
+    loadStudentHome_();
+  } else {
+    showScreen('S-01');
+    renderHome_();
+  }
+}
+
+async function loadCourseManagement_() {
+  const r = await api('course.listMine', {});
+  if (!r.ok) { toast(r.error.message); return; }
+  renderCourseManagementList_(r.data);
+}
+
+function renderCourseManagementList_(courses) {
+  const el = document.getElementById('s00f-list');
+  if (!courses.length) {
+    el.innerHTML = '<div class="empty-state">ยังไม่มีหลักสูตร กด "+ หลักสูตร" ด้านบนเพื่อสร้างหลักสูตรแรก</div>';
+    return;
+  }
+  el.innerHTML = courses.map(c => {
+    const active = c.status === 'ACTIVE';
+    return (
+      '<div class="card">' +
+      '<div class="row1" style="margin-bottom:12px;"><span class="status-badge ' + (active ? 'badge-open' : 'badge-none') + '">' + (active ? 'เปิดใช้งาน' : 'เก็บเข้าประวัติ') + '</span> ' + c.course_name + '</div>' +
+      '<div style="display:flex;gap:10px;">' +
+      (active
+        ? '<button class="btn btn-secondary" style="flex:1;" data-enter="' + c.course_id + '">เข้าใช้งาน</button><button class="btn btn-danger" style="flex:1;" data-archive="' + c.course_id + '">เก็บเข้าประวัติ</button>'
+        : '<button class="btn btn-secondary" style="flex:1;" data-restore="' + c.course_id + '">คืนค่า</button>') +
+      '</div></div>'
+    );
+  }).join('');
+  el.querySelectorAll('[data-enter]').forEach(b => b.addEventListener('click', guardClick_(() => enterCourseAsAdmin_(b.dataset.enter))));
+  el.querySelectorAll('[data-archive]').forEach(b => b.addEventListener('click', guardClick_(() => archiveCourse_(b.dataset.archive))));
+  el.querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', guardClick_(() => restoreCourse_(b.dataset.restore))));
+}
+
+async function enterCourseAsAdmin_(courseId) {
+  const r = await api('course.enterAsAdmin', { courseId: courseId });
+  if (!r.ok) { toast(r.error.message); return; }
+  state.sessionToken = r.data.sessionToken;
+  state.persona = 'STAFF';
+  state.profile = r.data.profile;
+  state.permissions = r.data.permissions || [];
+  state.selectedCourseId = courseId;
+  state.isSuperAdmin = false; // session ตอนนี้ผูกกับหลักสูตรนี้แล้ว ไม่ใช่ session global อีกต่อไป
+  renderHomeFromData_({ profile: r.data.profile, tiles: r.data.home.tiles });
+  showScreen('S-01');
+}
+
+async function archiveCourse_(courseId) {
+  if (!confirm('เก็บหลักสูตรนี้เข้าประวัติ? สมาชิกในหลักสูตรจะเข้าใช้งานไม่ได้จนกว่าจะคืนค่า')) return;
+  const r = await api('course.archive', { courseId: courseId });
+  if (!r.ok) { toast(r.error.message); return; }
+  toast('เก็บหลักสูตรเข้าประวัติแล้ว');
+  loadCourseManagement_();
+}
+
+async function restoreCourse_(courseId) {
+  const r = await api('course.restore', { courseId: courseId });
+  if (!r.ok) { toast(r.error.message); return; }
+  toast('คืนค่าหลักสูตรแล้ว');
+  loadCourseManagement_();
+}
+
+document.getElementById('btn-add-course').addEventListener('click', () => {
+  document.getElementById('cc-name').value = '';
+  document.getElementById('dlg-course-create').classList.add('show');
+});
+document.getElementById('dlg-course-cancel').addEventListener('click', () => document.getElementById('dlg-course-create').classList.remove('show'));
+onClickGuarded_('dlg-course-save', async () => {
+  const courseName = document.getElementById('cc-name').value.trim();
+  if (!courseName) { toast('กรุณากรอกชื่อหลักสูตร'); return; }
+  const r = await api('course.create', { courseName: courseName });
+  if (!r.ok) { toast(r.error.message); return; }
+  document.getElementById('dlg-course-create').classList.remove('show');
+  toast('สร้างหลักสูตรสำเร็จ');
+  loadCourseManagement_();
 });
 
 boot();
@@ -448,7 +673,7 @@ async function onVouchQrDecoded_(rawQr) {
   let idToken;
   try { idToken = liff.getIDToken(); } catch (e) { idToken = null; }
 
-  const r = await api('vouch.verify', { idToken: idToken, rawQr: rawQr, regType: state.regType });
+  const r = await api('vouch.verify', { idToken: idToken, rawQr: rawQr, regType: state.regType, courseId: state.selectedCourseId });
   if (!r.ok) {
     feedbackError();
     toast(voutchErrorMessage_(r.error.code, r.error.message));
