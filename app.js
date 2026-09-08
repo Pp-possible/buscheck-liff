@@ -1373,47 +1373,60 @@ function renderSeatGrid_(data) {
   wireSeatDrag_(grid);
 }
 
-// ลากที่นั่งที่มีคนไปวางบนที่นั่งอื่น (ว่างหรือมีคนก็ได้ — มีคนคือสลับกัน) แตะเฉยๆไม่ลาก = ติ๊กอยู่/ไม่อยู่
-// ใช้ Pointer Events ตัวเดียวครอบคลุมทั้งนิ้ว/เมาส์ ไม่ต้องแยก touch/mouse
+// กดค้างที่ที่นั่งก่อน (เหมือน "ยกที่นั่งขึ้น") แล้วค่อยลากไปวางที่อื่นได้ — แตะสั้นๆ ธรรมดา (ไม่ถึงเวลา
+// กดค้าง) ยังคงเป็นการติ๊กอยู่/ไม่อยู่เหมือนเดิมทุกประการ ไม่ได้เปลี่ยนพฤติกรรมเดิม แค่เพิ่มขั้น "กดค้าง
+// ก่อนลาก" กันลากพลาดตอนตั้งใจจะแค่แตะติ๊ก ใช้ Pointer Events ตัวเดียวครอบคลุมทั้งนิ้ว/เมาส์
 function wireSeatDrag_(grid) {
-  const THRESHOLD = 12;
+  const LONG_PRESS_MS = 450;
+  const MOVE_CANCEL_THRESHOLD = 10; // ขยับเกินนี้ก่อนครบเวลากดค้าง = ยกเลิกท่าทางนี้ไปเลย (ไม่ลาก ไม่ติ๊ก)
+
   grid.querySelectorAll('[data-seat-tap]').forEach(el => {
-    let startX = 0, startY = 0, dragging = false, lastOver = null;
+    let startX = 0, startY = 0, longPressTimer = null, picked = false, moved = false, lastOver = null;
+
+    function clearTimer_() { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }
+    function reset_() {
+      clearTimer_();
+      el.classList.remove('dragging');
+      el.style.transform = '';
+      el.style.pointerEvents = '';
+      if (lastOver) { lastOver.classList.remove('drop-target'); lastOver = null; }
+      picked = false; moved = false;
+    }
 
     el.addEventListener('pointerdown', (e) => {
       if (e.target.closest('[data-seat-unassign]') || e.target.closest('[data-seat-transfer]')) return;
-      startX = e.clientX; startY = e.clientY; dragging = false;
+      startX = e.clientX; startY = e.clientY;
       el.setPointerCapture(e.pointerId);
+      longPressTimer = setTimeout(() => {
+        picked = true; // "ยกที่นั่งขึ้น" แล้ว — ลากได้ตั้งแต่ตอนนี้
+        el.classList.add('dragging');
+        el.style.pointerEvents = 'none';
+        if (navigator.vibrate) navigator.vibrate(15);
+      }, LONG_PRESS_MS);
     });
     el.addEventListener('pointermove', (e) => {
       if (!el.hasPointerCapture(e.pointerId)) return;
       const dx = e.clientX - startX, dy = e.clientY - startY;
-      if (!dragging && Math.hypot(dx, dy) > THRESHOLD) {
-        dragging = true;
-        el.classList.add('dragging');
-        el.style.pointerEvents = 'none';
+      if (!picked) {
+        if (Math.hypot(dx, dy) > MOVE_CANCEL_THRESHOLD) clearTimer_(); // ขยับก่อนกดค้างครบเวลา ไม่นับเป็นลาก
+        return;
       }
-      if (dragging) {
-        el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-        const overEl = document.elementFromPoint(e.clientX, e.clientY);
-        const overSeat = overEl && overEl.closest && overEl.closest('.seat');
-        if (lastOver && lastOver !== overSeat) lastOver.classList.remove('drop-target');
-        if (overSeat && overSeat !== el) { overSeat.classList.add('drop-target'); lastOver = overSeat; } else { lastOver = null; }
-      }
+      moved = true;
+      el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      const overEl = document.elementFromPoint(e.clientX, e.clientY);
+      const overSeat = overEl && overEl.closest && overEl.closest('.seat');
+      if (lastOver && lastOver !== overSeat) lastOver.classList.remove('drop-target');
+      if (overSeat && overSeat !== el) { overSeat.classList.add('drop-target'); lastOver = overSeat; } else { lastOver = null; }
     });
     el.addEventListener('pointerup', guardClick_(async (e) => {
       if (!el.hasPointerCapture(e.pointerId)) return;
       el.releasePointerCapture(e.pointerId);
-      const wasDragging = dragging;
-      el.classList.remove('dragging');
-      el.style.transform = '';
-      el.style.pointerEvents = '';
-      if (lastOver) lastOver.classList.remove('drop-target');
-      const overEl = wasDragging ? document.elementFromPoint(e.clientX, e.clientY) : null;
+      const wasPicked = picked, wasMoved = moved;
+      const overEl = wasMoved ? document.elementFromPoint(e.clientX, e.clientY) : null;
       const overSeat = overEl && overEl.closest && overEl.closest('.seat');
-      dragging = false; lastOver = null;
+      reset_();
 
-      if (wasDragging && overSeat && overSeat !== el) {
+      if (wasMoved && overSeat && overSeat !== el) {
         const toSeatId = overSeat.dataset.seatTap || overSeat.dataset.seatEmpty;
         if (toSeatId) {
           const r = await api('seat.move', { busId: state.currentSeatBusId, fromSeatId: el.dataset.seatTap, toSeatId: toSeatId });
@@ -1422,8 +1435,10 @@ function wireSeatDrag_(grid) {
         }
         return;
       }
-      if (!wasDragging) await toggleSeat_(el.dataset.seatStudent, el.dataset.seatChecked === '1');
+      if (wasPicked) return; // กดค้างจนยกขึ้นแล้วแต่ปล่อยเฉยๆ ไม่ได้ย้ายไปไหน = ยกเลิก ไม่ติ๊ก
+      await toggleSeat_(el.dataset.seatStudent, el.dataset.seatChecked === '1');
     }));
+    el.addEventListener('pointercancel', reset_);
   });
 }
 
