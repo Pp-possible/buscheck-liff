@@ -530,10 +530,13 @@ async function enterCourse_(courseId, courseName) {
   }
 }
 
+// s00f แสดงเฉพาะหลักสูตรที่เปิดใช้งานอยู่ (เหมือนแพทเทิร์นรายการอื่นในแอพ เช่น bus.list ที่โชว์แค่
+// is_active — ตัวที่เก็บเข้าประวัติแล้วย้ายไปอยู่หน้าถังขยะ (S-00g) แทน ไม่ปนกันในลิสต์เดียว)
 async function loadCourseManagement_() {
   const r = await api('course.listMine', {});
   if (!r.ok) { toast(r.error.message); return; }
-  renderCourseManagementList_(r.data);
+  state.allCourses = r.data;
+  renderCourseManagementList_(r.data.filter(c => c.status === 'ACTIVE'));
 }
 
 function renderCourseManagementList_(courses) {
@@ -542,22 +545,40 @@ function renderCourseManagementList_(courses) {
     el.innerHTML = '<div class="empty-state">ยังไม่มีหลักสูตร กด "+ หลักสูตร" ด้านบนเพื่อสร้างหลักสูตรแรก</div>';
     return;
   }
-  el.innerHTML = courses.map(c => {
-    const active = c.status === 'ACTIVE';
-    return (
-      '<div class="card">' +
-      '<div class="row1" style="margin-bottom:12px;"><span class="status-badge ' + (active ? 'badge-open' : 'badge-none') + '">' + (active ? 'เปิดใช้งาน' : 'เก็บเข้าประวัติ') + '</span> ' + c.course_name + '</div>' +
-      '<div style="display:flex;gap:10px;">' +
-      (active
-        ? '<button class="btn btn-secondary" style="flex:1;" data-enter="' + c.course_id + '">เข้าใช้งาน</button><button class="btn btn-danger" style="flex:1;" data-archive="' + c.course_id + '">เก็บเข้าประวัติ</button>'
-        : '<button class="btn btn-secondary" style="flex:1;" data-restore="' + c.course_id + '">คืนค่า</button>') +
-      '</div></div>'
-    );
-  }).join('');
+  el.innerHTML = courses.map(c => (
+    '<div class="card">' +
+    '<div class="row1" style="margin-bottom:12px;">' + c.course_name + '</div>' +
+    '<div style="display:flex;gap:10px;">' +
+    '<button class="btn btn-secondary" style="flex:1;" data-enter="' + c.course_id + '">เข้าใช้งาน</button>' +
+    '<button class="btn btn-danger" style="flex:1;" data-archive="' + c.course_id + '">เก็บเข้าประวัติ</button>' +
+    '</div></div>'
+  )).join('');
   el.querySelectorAll('[data-enter]').forEach(b => b.addEventListener('click', guardClick_(() => enterCourseAsAdmin_(b.dataset.enter))));
   el.querySelectorAll('[data-archive]').forEach(b => b.addEventListener('click', guardClick_(() => archiveCourse_(b.dataset.archive))));
-  el.querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', guardClick_(() => restoreCourse_(b.dataset.restore))));
 }
+
+// ---------------------------------------------------------------------------
+// S-00g — ถังขยะหลักสูตร (เฉพาะที่เก็บเข้าประวัติแล้ว) คืนค่า/ลบถาวรได้ ใช้ตัวเรนเดอร์กลางเดียวกับ
+// S-06 "ประวัติดำเนินการ" (renderHistorySection_) — แพทเทิร์นเดียวกับรถ/ผู้ใช้/นักเรียน/คิวอนุมัติ/แจ้งเตือน
+// ---------------------------------------------------------------------------
+
+async function loadCourseTrash_() {
+  const r = await api('course.listMine', {});
+  if (!r.ok) { toast(r.error.message); return; }
+  const archived = r.data.filter(c => c.status !== 'ACTIVE');
+  renderHistorySection_('s00g-list', archived, {
+    title: (c) => c.course_name,
+    subtitle: () => '',
+    restoreAction: 'course.restore', restorePayload: (c) => ({ courseId: c.course_id }),
+    deleteAction: 'course.delete', deletePayload: (c) => ({ courseId: c.course_id }),
+    // คืนค่าแล้วต้อง refresh รายการหลักของ S-00f ด้วย ไม่งั้นย้อนกลับไปจะเห็นค้างของเก่า (S-00f ไม่ได้
+    // reload อัตโนมัติตอน showScreen แค่สลับ DOM ที่แสดงเฉยๆ)
+    reload: () => { loadCourseTrash_(); loadCourseManagement_(); }
+  });
+}
+
+document.getElementById('btn-goto-course-trash').addEventListener('click', () => { showScreen('S-00g'); loadCourseTrash_(); });
+document.getElementById('btn-refresh-course-trash').addEventListener('click', () => loadCourseTrash_());
 
 async function enterCourseAsAdmin_(courseId) {
   const r = await api('course.enterAsAdmin', { courseId: courseId });
@@ -577,13 +598,6 @@ async function archiveCourse_(courseId) {
   const r = await api('course.archive', { courseId: courseId });
   if (!r.ok) { toast(r.error.message); return; }
   toast('เก็บหลักสูตรเข้าประวัติแล้ว');
-  loadCourseManagement_();
-}
-
-async function restoreCourse_(courseId) {
-  const r = await api('course.restore', { courseId: courseId });
-  if (!r.ok) { toast(r.error.message); return; }
-  toast('คืนค่าหลักสูตรแล้ว');
   loadCourseManagement_();
 }
 
@@ -908,7 +922,7 @@ function renderRoundsList_(rounds, opts) {
   if (newRoundBtn) newRoundBtn.style.display = (state.profile && state.profile.level >= 80) ? '' : 'none';
 
   if (!rounds.length) {
-    list.innerHTML = '<div class="empty-state">' + (archivedList ? 'ยังไม่มีรอบที่เก็บไว้' : 'วันนี้ยังไม่มีรอบเช็ค') + '</div>';
+    list.innerHTML = '<div class="empty-state">' + (archivedList ? 'ยังไม่มีรอบที่เก็บไว้' : 'ยังไม่มีรอบเช็ค กด "+" ด้านบนเพื่อสร้างรอบใหม่') + '</div>';
     return;
   }
 
@@ -1591,7 +1605,7 @@ function renderDaySummary_(rounds) {
   state.activeRoundsRaw = rounds;
 
   const wrap = document.getElementById('s07-summary');
-  if (!rounds.length) { wrap.innerHTML = '<div class="empty-state">วันนี้ยังไม่มีรอบเช็ค</div>'; return; }
+  if (!rounds.length) { wrap.innerHTML = '<div class="empty-state">ยังไม่มีรอบเช็ค</div>'; return; }
 
   const groups = groupRoundsForDisplay_(rounds).slice()
     .sort((a, b) => String(b.scheduled_at || '').localeCompare(String(a.scheduled_at || ''))); // ใหม่ไปเก่า
@@ -2418,7 +2432,7 @@ async function switchScanMode_(type) {
   if (!r.ok) return;
   const round = r.data.find(x => x.round_id === state.currentRoundId);
   if (!round) return;
-  const target = r.data.find(x => x.scope_id === round.scope_id && x.round_type === type && x.status === 'OPEN');
+  const target = r.data.find(x => x.scope_id === round.scope_id && x.date === round.date && x.round_type === type && x.status === 'OPEN');
   if (!target) { toast('ยังไม่มีรอบประเภทนี้เปิดอยู่'); return; }
   enterScanScreen_(target.round_id);
 }

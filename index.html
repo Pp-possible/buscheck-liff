@@ -8,7 +8,7 @@
      บนมือถือ cache ไฟล์ static พวกนี้แน่นมาก แก้โค้ดแล้ว deploy ขึ้นจริงแล้วแต่ผู้ใช้ยังเห็นของเก่าอยู่ได้
      ทุกครั้งที่แก้ styles.css/app.js/config.js แล้วต้องการให้มือถือดึงของใหม่ทันที ต้องขยับเลขวันที่นี้ขึ้น
      (เปลี่ยน query string ทำให้ browser มองเป็นคนละไฟล์ ข้าม cache เก่าไปเลย ไม่ต้องรอ revalidate) -->
-<link rel="stylesheet" href="styles.css?v=20260908b">
+<link rel="stylesheet" href="styles.css?v=20260908c">
 <script>
   // ตัวจับ error ถาวร — โชว์ error ตรงจอเลยเมื่อมีปัญหาจริงเท่านั้น (ปกติจะไม่ขึ้นอะไร)
   // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้ เวลามีปัญหาจะได้เห็นสาเหตุจากภาพหน้าจอผู้ใช้ได้เลย
@@ -197,12 +197,24 @@
   <section class="screen" data-screen="S-00f">
     <div class="topbar">
       <h1 class="title">จัดการหลักสูตร</h1>
+      <button class="back" id="btn-goto-course-trash" title="ถังขยะหลักสูตร" aria-label="ถังขยะหลักสูตร"><svg class="icon"><use href="#i-clock"/></svg></button>
       <button class="back" id="btn-logout-s00f" title="ออกจากระบบ" aria-label="ออกจากระบบ"><svg class="icon"><use href="#i-log-out"/></svg></button>
     </div>
     <div style="padding:12px 16px;">
       <button class="btn btn-primary btn-block" id="btn-add-course">+ หลักสูตร</button>
     </div>
     <div id="s00f-list"></div>
+  </section>
+
+  <!-- ============ S-00g ถังขยะหลักสูตร (Super Admin เท่านั้น — หลักสูตรที่เก็บเข้าประวัติแล้ว) ============ -->
+  <section class="screen" data-screen="S-00g">
+    <div class="topbar">
+      <button class="back" data-back="S-00f" aria-label="ย้อนกลับ">←</button>
+      <h1 class="title">ถังขยะหลักสูตร</h1>
+      <button class="back" id="btn-refresh-course-trash" title="รีเฟรช" aria-label="รีเฟรช"><svg class="icon"><use href="#i-refresh"/></svg></button>
+    </div>
+    <p style="padding:0 16px;color:var(--text-muted);font-size:13px;">หลักสูตรที่ "เก็บเข้าประวัติ" จะมารวมที่นี่ — คืนค่ากลับไปใช้งานได้ หรือลบถาวร (ลบถาวรแล้วข้อมูลทั้งหมดของหลักสูตรนี้จะหายไปด้วยและกู้คืนไม่ได้)</p>
+    <div id="s00g-list"></div>
   </section>
 
   <!-- ============ S-00a เลือกประเภท ============ -->
@@ -764,7 +776,7 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" onerror="showDebug_('โหลด LIFF SDK ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="showDebug_('โหลด html5-qrcode ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="showDebug_('โหลด qrcodejs ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
-<script src="config.js?v=20260908b"></script>
-<script src="app.js?v=20260908b"></script>
+<script src="config.js?v=20260908c"></script>
+<script src="app.js?v=20260908c"></script>
 </body>
 </html>
