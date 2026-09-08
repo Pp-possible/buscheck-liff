@@ -8,7 +8,7 @@
      บนมือถือ cache ไฟล์ static พวกนี้แน่นมาก แก้โค้ดแล้ว deploy ขึ้นจริงแล้วแต่ผู้ใช้ยังเห็นของเก่าอยู่ได้
      ทุกครั้งที่แก้ styles.css/app.js/config.js แล้วต้องการให้มือถือดึงของใหม่ทันที ต้องขยับเลขวันที่นี้ขึ้น
      (เปลี่ยน query string ทำให้ browser มองเป็นคนละไฟล์ ข้าม cache เก่าไปเลย ไม่ต้องรอ revalidate) -->
-<link rel="stylesheet" href="styles.css?v=20260908c">
+<link rel="stylesheet" href="styles.css?v=20260908d">
 <script>
   // ตัวจับ error ถาวร — โชว์ error ตรงจอเลยเมื่อมีปัญหาจริงเท่านั้น (ปกติจะไม่ขึ้นอะไร)
   // เพราะเปิด DevTools บน in-app browser ของ LINE ไม่ได้ เวลามีปัญหาจะได้เห็นสาเหตุจากภาพหน้าจอผู้ใช้ได้เลย
@@ -404,6 +404,19 @@
     <div id="s14-list"></div>
   </section>
 
+  <!-- ============ S-26 ผังที่นั่ง — แตะที่นั่งว่างเพื่อบรรจุคน แตะที่นั่งมีคนเพื่อติ๊กอยู่/ไม่อยู่ ============ -->
+  <section class="screen" data-screen="S-26">
+    <div class="topbar">
+      <button class="back" data-back="S-14" aria-label="ย้อนกลับ">←</button>
+      <h1 class="title">ผังที่นั่ง</h1>
+      <button class="back" id="btn-seatmap-rows" title="จัดการที่นั่ง" aria-label="จัดการที่นั่ง"><svg class="icon"><use href="#i-pencil"/></svg></button>
+    </div>
+    <p style="padding:0 16px;color:var(--text-muted);font-size:13px;">แตะที่นั่งว่างเพื่อบรรจุคน · แตะที่นั่งที่มีคนเพื่อติ๊กอยู่/ไม่อยู่ (ไม่ต้องสแกนซ้ำ) · ลากคนย้ายที่นั่งได้ · กด × ถอน</p>
+    <div class="sync-indicator" id="s26-sync"></div>
+    <div id="s26-incoming"></div>
+    <div id="s26-grid"></div>
+  </section>
+
   <!-- ============ S-16 รายงาน: ใครเช็คใคร ============ -->
   <section class="screen" data-screen="S-16">
     <div class="topbar">
@@ -757,6 +770,83 @@
   </div>
 </div>
 
+<div class="overlay" id="dlg-seat-assign">
+  <div class="dialog">
+    <h3>เลือกนักเรียนลงที่นั่ง</h3>
+    <div class="filter-tabs" id="seat-assign-tabs">
+      <div class="chip selected" data-satab="search">ค้นหา</div>
+      <div class="chip" data-satab="scan">สแกน QR</div>
+      <div class="chip" data-satab="new">+ คนใหม่</div>
+    </div>
+
+    <div id="seat-assign-panel-search">
+      <div class="field" style="margin:10px 0;">
+        <input id="seat-assign-search" type="text" placeholder="ค้นหาชื่อ/รหัสนักเรียน">
+      </div>
+      <div id="seat-assign-results" style="max-height:42vh;overflow:auto;"></div>
+    </div>
+
+    <div id="seat-assign-panel-scan" style="display:none;margin:10px 0;">
+      <div id="qr-reader-seat" style="width:100%;border-radius:var(--radius-md);overflow:hidden;"></div>
+      <p style="color:var(--text-muted);font-size:13px;margin-top:8px;">เล็งกล้องไปที่ QR ของนักเรียน</p>
+    </div>
+
+    <div id="seat-assign-panel-new" style="display:none;margin:10px 0;">
+      <div class="field" style="margin:0 0 10px;"><label>ชื่อ-นามสกุล *</label><input id="seat-new-fullname" type="text"></div>
+      <div class="field" style="margin:0 0 10px;"><label>ชื่อเล่น</label><input id="seat-new-nickname" type="text"></div>
+      <div style="display:flex;gap:10px;">
+        <div class="field" style="flex:1;margin:0 0 10px;"><label>ระดับชั้น *</label><input id="seat-new-classlevel" type="text" placeholder="เช่น ป.4"></div>
+        <div class="field" style="flex:1;margin:0 0 10px;"><label>ห้อง *</label><input id="seat-new-room" type="text" placeholder="เช่น 1"></div>
+      </div>
+      <div class="field" style="margin:0 0 10px;"><label>เบอร์ผู้ปกครอง *</label><input id="seat-new-guardianphone" type="tel"></div>
+      <button class="btn btn-primary btn-block" id="btn-seat-new-submit">เพิ่ม + ลงที่นั่งนี้</button>
+    </div>
+
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="dlg-seat-assign-cancel">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="dlg-seat-rows">
+  <div class="dialog">
+    <h3>จัดการที่นั่ง</h3>
+    <div style="display:flex;gap:10px;margin-bottom:14px;">
+      <button class="btn btn-secondary" style="flex:1;" id="btn-seat-add-row">+ เพิ่มแถว</button>
+      <button class="btn btn-secondary" style="flex:1;" id="btn-seat-remove-row">- ลบแถวสุดท้าย</button>
+    </div>
+    <div class="field" style="margin:0 0 6px;">
+      <label>เพิ่มที่นั่งพิเศษ (เกิน 2 ต่อฝั่งปกติ)</label>
+      <div style="display:flex;gap:8px;">
+        <input id="seat-extra-row" type="number" min="1" max="20" step="1" placeholder="แถวที่" style="flex:1;">
+        <select id="seat-extra-side" style="flex:1;">
+          <option value="L">ฝั่งซ้าย</option>
+          <option value="R">ฝั่งขวา</option>
+        </select>
+        <button class="btn btn-secondary" id="btn-seat-add-extra">เพิ่ม</button>
+      </div>
+    </div>
+    <p style="color:var(--text-muted);font-size:13px;margin-top:10px;">ลบที่นั่งเดี่ยวๆ ทำได้จากปุ่ม × บนที่นั่งว่างในผังโดยตรง</p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="dlg-seat-rows-cancel">ปิด</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="dlg-seat-transfer">
+  <div class="dialog">
+    <h3>ส่งไปรถอื่น</h3>
+    <div class="field" style="margin:0 0 10px;">
+      <label>รถปลายทาง</label>
+      <select id="seat-transfer-bus"></select>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="dlg-seat-transfer-cancel">ยกเลิก</button>
+      <button class="btn btn-primary" id="dlg-seat-transfer-save">ส่ง</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="dlg-course-create">
   <div class="dialog">
     <h3>สร้างหลักสูตรใหม่</h3>
@@ -776,7 +866,7 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" onerror="showDebug_('โหลด LIFF SDK ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="showDebug_('โหลด html5-qrcode ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="showDebug_('โหลด qrcodejs ไม่สำเร็จ (CDN โดนบล็อก?)')"></script>
-<script src="config.js?v=20260908c"></script>
-<script src="app.js?v=20260908c"></script>
+<script src="config.js?v=20260908d"></script>
+<script src="app.js?v=20260908d"></script>
 </body>
 </html>

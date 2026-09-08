@@ -35,6 +35,7 @@ const state = {
   sponsor: null,
   html5Qr: null,
   html5QrVouch: null,
+  html5QrSeat: null,
   scanHistory: {},  // clientEventId -> true, กันยิงซ้ำเร็วเกินไปจากกล้อง
   bootReady: false, // true เมื่อ auth.bootstrap ผ่านแล้วจริง (ก่อนหน้านี้หน้าจออาจวาดจากแคชไปก่อน)
   pendingRoute: null,
@@ -179,6 +180,7 @@ function showScreen(name, opts) {
   window.scrollTo(0, 0);
   if (name !== 'S-03' && state.html5Qr) stopScanCamera_();
   if (name !== 'S-00b' && state.html5QrVouch) stopVouchCamera_();
+  if (name !== 'S-26' && state.html5QrSeat) stopSeatQrCamera_();
   if (name !== 'S-19' && state.vouchTimer) { clearInterval(state.vouchTimer); state.vouchTimer = null; }
   if (name !== 'S-21' && name !== 'S-00d' && state.studentQrTimer) { clearInterval(state.studentQrTimer); state.studentQrTimer = null; }
   // พก history ของแต่ละหน้าไว้เสมอ (ยกเว้นตอน sync จาก popstate เอง) กัน LIFF ตีความปัดขวาเป็น "ปิดหน้าต่าง" เพราะไม่มี history ให้ย้อน
@@ -1073,6 +1075,7 @@ function renderSessionBusCards_(rounds, opts) {
       (isPlanned && !archivedList && isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
       (isPlanned && !archivedList && !isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-wait-open="1">รอเปิด</button>' : '') +
       (round.status === 'OPEN' ? '<button class="btn btn-primary" style="margin-top:8px" data-enter="' + round.round_id + '">เช็คต่อ →</button>' : '') +
+      (round.scope_type === 'BUS' && round.scope_id ? '<button class="btn btn-secondary" style="margin-top:8px" data-seatmap="' + round.round_id + '">ผังที่นั่ง</button>' : '') +
       (round.status === 'OPEN' && canClose ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-round="' + round.round_id + '">ปิดรอบ</button>' : '') +
       (isClosed && canManage ? '<button class="btn btn-secondary" style="margin-top:8px" data-reopen="' + round.round_id + '">เปิดรอบอีกครั้ง</button>' : '') +
       (isClosed && canCloseTrip && round.trip_id ? '<button class="btn btn-secondary" style="margin-top:8px" data-close-trip="' + round.trip_id + '">ปิดเที่ยวรถ</button>' : '') +
@@ -1102,6 +1105,7 @@ function renderSessionBusCards_(rounds, opts) {
   })));
   list.querySelectorAll('[data-wait-open]').forEach(btn => btn.addEventListener('click', () => toast('รอ Super Admin เปิดรอบรถ')));
   list.querySelectorAll('[data-enter]').forEach(btn => btn.addEventListener('click', () => enterScanScreen_(btn.dataset.enter)));
+  list.querySelectorAll('[data-seatmap]').forEach(btn => btn.addEventListener('click', () => enterSeatMap_(btn.dataset.seatmap)));
   list.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openCreateRoundDialog_(state.roundsById[btn.dataset.edit])));
   // ดูรายชื่อ — เปิดหน้ารายชื่อ (S-04) ตรงจากการ์ดรอบนี้เลย ไม่ต้องเข้าโหมดสแกนก่อน ย้อนกลับมาที่หน้านี้ได้
   list.querySelectorAll('[data-view-roster]').forEach(btn => btn.addEventListener('click', () => {
@@ -1241,6 +1245,361 @@ async function loadRoundHistory_(opts) {
 }
 
 document.getElementById('btn-goto-round-history').addEventListener('click', () => { showScreen('S-06'); loadHistoryScreen_(); });
+
+// ---------------------------------------------------------------------------
+// S-26 ผังที่นั่ง — บรรจุคนลงที่นั่งครั้งแรก + ติ๊กอยู่/ไม่อยู่ในรอบถัดไปโดยไม่ต้องสแกนซ้ำ
+// การติ๊ก/ถอนติ๊กไม่ได้เขียน roundChecks เองที่นี่ — เรียก trip.addStudent/scan.undo เดิมตรงๆ
+// (เส้นทางเดียวกับสแกน QR จริง) ผังที่นั่งมีแค่เรื่อง "ใครนั่งตรงไหน" เท่านั้น
+// ---------------------------------------------------------------------------
+
+async function enterSeatMap_(roundId) {
+  state.currentSeatRoundId = roundId;
+  state.acceptingTransferId = null;
+  showScreen('S-26');
+  await loadSeatMap_();
+}
+
+async function loadSeatMap_() {
+  const grid = document.getElementById('s26-grid');
+  grid.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  setSyncBadge_('s26-sync', 'loading');
+  const r = await api('seat.roundView', { roundId: state.currentSeatRoundId });
+  if (!r.ok) {
+    grid.innerHTML = '<div class="empty-state">' + r.error.message + '</div>';
+    setSyncBadge_('s26-sync', 'error');
+    return;
+  }
+  setSyncBadge_('s26-sync', 'fresh', Date.now());
+  state.currentSeatBusId = r.data.busId;
+  renderIncomingTransfers_(r.data.incomingTransfers || []);
+  renderSeatGrid_(r.data);
+}
+
+function renderIncomingTransfers_(transfers) {
+  const el = document.getElementById('s26-incoming');
+  if (!transfers.length) { el.innerHTML = ''; return; }
+  el.innerHTML = transfers.map(t => (
+    '<div class="card" style="margin:10px 16px;background:var(--bg-elevated);">' +
+    '<div class="row1" style="margin-bottom:8px;">รอรับเข้ารถ: ' + t.studentName + '</div>' +
+    '<div style="display:flex;gap:8px;">' +
+    '<button class="btn btn-primary" style="flex:1;" data-accept-transfer="' + t.transferId + '">แตะที่นั่งว่างเพื่อรับเข้า</button>' +
+    '<button class="btn btn-secondary" data-cancel-transfer="' + t.transferId + '">ยกเลิก</button>' +
+    '</div></div>'
+  )).join('');
+  el.querySelectorAll('[data-accept-transfer]').forEach(b => b.addEventListener('click', guardClick_(() => {
+    state.acceptingTransferId = b.dataset.acceptTransfer;
+    toast('แตะที่นั่งว่างที่ต้องการรับเข้า');
+  })));
+  el.querySelectorAll('[data-cancel-transfer]').forEach(b => b.addEventListener('click', guardClick_(async (e) => {
+    const r = await api('seat.transferCancel', { transferId: e.currentTarget.dataset.cancelTransfer });
+    if (!r.ok) { toast(r.error.message); return; }
+    toast('ยกเลิกคำขอย้ายรถแล้ว');
+    await loadSeatMap_();
+  })));
+}
+
+function seatCellHtml_(seat) {
+  if (!seat.studentId) {
+    return (
+      '<div class="seat empty" data-seat-empty="' + seat.seat_id + '">ว่าง' +
+      '<span class="seat-unassign" data-seat-remove-position="' + seat.seat_id + '" title="ลบที่นั่งนี้ออกจากผัง">×</span>' +
+      '</div>'
+    );
+  }
+  const cls = seat.checked ? 'seat assigned checked' : 'seat assigned';
+  return (
+    '<div class="' + cls + '" data-seat-tap="' + seat.seat_id + '" data-seat-student="' + seat.studentId + '" data-seat-checked="' + (seat.checked ? '1' : '0') + '">' +
+    (seat.studentName || seat.studentId) +
+    '<span class="seat-transfer" data-seat-transfer="' + seat.seat_id + '" title="ส่งไปรถอื่น">⇄</span>' +
+    '<span class="seat-unassign" data-seat-unassign="' + seat.seat_id + '" title="ถอนที่นั่ง">×</span>' +
+    '</div>'
+  );
+}
+
+function renderSeatGrid_(data) {
+  const grid = document.getElementById('s26-grid');
+  if (!data.seats.length) { grid.innerHTML = '<div class="empty-state">รถคันนี้ยังไม่มีผังที่นั่ง</div>'; return; }
+
+  const seatsByRow = {};
+  data.seats.forEach(s => { (seatsByRow[s.row] = seatsByRow[s.row] || { L: [], R: [] })[s.side].push(s); });
+
+  const rowsHtml = [];
+  for (let r = 1; r <= data.rows; r++) {
+    const row = seatsByRow[r] || { L: [], R: [] };
+    rowsHtml.push(
+      '<div class="seat-row">' +
+      '<div class="seat-side">' + row.L.map(seatCellHtml_).join('') + '</div>' +
+      '<div class="aisle"></div>' +
+      '<div class="seat-side">' + row.R.map(seatCellHtml_).join('') + '</div>' +
+      '</div>'
+    );
+  }
+  grid.innerHTML = '<div class="seat-grid">' + rowsHtml.join('') + '</div>';
+
+  grid.querySelectorAll('[data-seat-empty]').forEach(el => el.addEventListener('click', guardClick_(async () => {
+    if (state.acceptingTransferId) {
+      const transferId = state.acceptingTransferId;
+      state.acceptingTransferId = null;
+      const r = await api('seat.transferAccept', { transferId: transferId, toSeatId: el.dataset.seatEmpty, roundId: state.currentSeatRoundId });
+      if (!r.ok) { toast(r.error.message); return; }
+      toast('รับเข้ารถแล้ว');
+      await loadSeatMap_();
+      return;
+    }
+    openSeatAssignDialog_(el.dataset.seatEmpty);
+  })));
+  grid.querySelectorAll('[data-seat-remove-position]').forEach(el => el.addEventListener('click', guardClick_(async (e) => {
+    e.stopPropagation();
+    const r = await api('bus.seatLayoutRemoveSeat', { busId: state.currentSeatBusId, seatId: e.currentTarget.dataset.seatRemovePosition });
+    if (!r.ok) { toast(r.error.message); return; }
+    await loadSeatMap_();
+  })));
+  grid.querySelectorAll('[data-seat-unassign]').forEach(el => el.addEventListener('click', guardClick_(async (e) => {
+    e.stopPropagation();
+    if (!confirm('ถอนที่นั่งนี้? (ไม่กระทบสถานะเช็คที่มีอยู่แล้ว)')) return;
+    const r = await api('seat.unassign', { busId: state.currentSeatBusId, seatId: e.currentTarget.dataset.seatUnassign });
+    if (!r.ok) { toast(r.error.message); return; }
+    await loadSeatMap_();
+  })));
+  grid.querySelectorAll('[data-seat-transfer]').forEach(el => el.addEventListener('click', guardClick_((e) => {
+    e.stopPropagation();
+    openSeatTransferDialog_(e.currentTarget.dataset.seatTransfer);
+  })));
+
+  wireSeatDrag_(grid);
+}
+
+// ลากที่นั่งที่มีคนไปวางบนที่นั่งอื่น (ว่างหรือมีคนก็ได้ — มีคนคือสลับกัน) แตะเฉยๆไม่ลาก = ติ๊กอยู่/ไม่อยู่
+// ใช้ Pointer Events ตัวเดียวครอบคลุมทั้งนิ้ว/เมาส์ ไม่ต้องแยก touch/mouse
+function wireSeatDrag_(grid) {
+  const THRESHOLD = 12;
+  grid.querySelectorAll('[data-seat-tap]').forEach(el => {
+    let startX = 0, startY = 0, dragging = false, lastOver = null;
+
+    el.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('[data-seat-unassign]') || e.target.closest('[data-seat-transfer]')) return;
+      startX = e.clientX; startY = e.clientY; dragging = false;
+      el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!el.hasPointerCapture(e.pointerId)) return;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if (!dragging && Math.hypot(dx, dy) > THRESHOLD) {
+        dragging = true;
+        el.classList.add('dragging');
+        el.style.pointerEvents = 'none';
+      }
+      if (dragging) {
+        el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+        const overEl = document.elementFromPoint(e.clientX, e.clientY);
+        const overSeat = overEl && overEl.closest && overEl.closest('.seat');
+        if (lastOver && lastOver !== overSeat) lastOver.classList.remove('drop-target');
+        if (overSeat && overSeat !== el) { overSeat.classList.add('drop-target'); lastOver = overSeat; } else { lastOver = null; }
+      }
+    });
+    el.addEventListener('pointerup', guardClick_(async (e) => {
+      if (!el.hasPointerCapture(e.pointerId)) return;
+      el.releasePointerCapture(e.pointerId);
+      const wasDragging = dragging;
+      el.classList.remove('dragging');
+      el.style.transform = '';
+      el.style.pointerEvents = '';
+      if (lastOver) lastOver.classList.remove('drop-target');
+      const overEl = wasDragging ? document.elementFromPoint(e.clientX, e.clientY) : null;
+      const overSeat = overEl && overEl.closest && overEl.closest('.seat');
+      dragging = false; lastOver = null;
+
+      if (wasDragging && overSeat && overSeat !== el) {
+        const toSeatId = overSeat.dataset.seatTap || overSeat.dataset.seatEmpty;
+        if (toSeatId) {
+          const r = await api('seat.move', { busId: state.currentSeatBusId, fromSeatId: el.dataset.seatTap, toSeatId: toSeatId });
+          if (!r.ok) toast(r.error.message);
+          await loadSeatMap_();
+        }
+        return;
+      }
+      if (!wasDragging) await toggleSeat_(el.dataset.seatStudent, el.dataset.seatChecked === '1');
+    }));
+  });
+}
+
+async function toggleSeat_(studentId, currentlyChecked) {
+  const r = currentlyChecked
+    ? await api('scan.undo', { roundId: state.currentSeatRoundId, studentId })
+    : await api('trip.addStudent', { roundId: state.currentSeatRoundId, studentId, clientEventId: uuid() });
+  if (!r.ok) { toast(r.error.message); return; }
+  await loadSeatMap_();
+}
+
+// ---------------------------------------------------------------------------
+// dlg-seat-assign — 3 แท็บ: ค้นหาชื่อ / สแกน QR / เพิ่มนักเรียนใหม่แล้วลงที่นั่งเลย
+// ---------------------------------------------------------------------------
+
+function openSeatAssignDialog_(seatId) {
+  state.seatAssignTarget = { seatId };
+  document.getElementById('seat-assign-search').value = '';
+  document.getElementById('seat-assign-results').innerHTML = '';
+  ['seat-new-fullname', 'seat-new-nickname', 'seat-new-classlevel', 'seat-new-room', 'seat-new-guardianphone'].forEach(id => { document.getElementById(id).value = ''; });
+  switchSeatAssignTab_('search');
+  document.getElementById('dlg-seat-assign').classList.add('show');
+  document.getElementById('seat-assign-search').focus();
+}
+
+function closeSeatAssignDialog_() {
+  stopSeatQrCamera_();
+  document.getElementById('dlg-seat-assign').classList.remove('show');
+}
+document.getElementById('dlg-seat-assign-cancel').addEventListener('click', closeSeatAssignDialog_);
+
+function switchSeatAssignTab_(tab) {
+  document.querySelectorAll('#seat-assign-tabs .chip').forEach(c => c.classList.toggle('selected', c.dataset.satab === tab));
+  document.getElementById('seat-assign-panel-search').style.display = tab === 'search' ? '' : 'none';
+  document.getElementById('seat-assign-panel-scan').style.display = tab === 'scan' ? '' : 'none';
+  document.getElementById('seat-assign-panel-new').style.display = tab === 'new' ? '' : 'none';
+  if (tab === 'scan') startSeatQrCamera_(); else stopSeatQrCamera_();
+}
+document.getElementById('seat-assign-tabs').querySelectorAll('.chip').forEach(chip => chip.addEventListener('click', () => switchSeatAssignTab_(chip.dataset.satab)));
+
+let seatSearchDebounce_ = null;
+document.getElementById('seat-assign-search').addEventListener('input', (e) => {
+  clearTimeout(seatSearchDebounce_);
+  const q = e.target.value.trim();
+  const resultsEl = document.getElementById('seat-assign-results');
+  if (!q) { resultsEl.innerHTML = ''; return; }
+  seatSearchDebounce_ = setTimeout(async () => {
+    const r = await api('student.searchAll', { q: q });
+    if (!r.ok) return;
+    resultsEl.innerHTML = r.data.map(s =>
+      '<div class="roster-row" data-pick="' + s.student_id + '"><div><div class="name">' + (s.nickname || s.name) + '</div>' +
+      '<div class="meta">' + s.name + ' · ' + s.class + '</div></div></div>'
+    ).join('') || '<div class="empty-state">ไม่พบรายชื่อ</div>';
+    resultsEl.querySelectorAll('[data-pick]').forEach(row => row.addEventListener('click', guardClick_(() => assignPickedStudent_(row.dataset.pick))));
+  }, 300);
+});
+
+async function assignPickedStudent_(studentId) {
+  const seatId = state.seatAssignTarget && state.seatAssignTarget.seatId;
+  if (!seatId) return;
+  const r = await api('seat.assign', { busId: state.currentSeatBusId, seatId: seatId, studentId: studentId, roundId: state.currentSeatRoundId });
+  if (!r.ok) { toast(r.error.message); return; }
+  closeSeatAssignDialog_();
+  toast('บรรจุที่นั่งแล้ว');
+  await loadSeatMap_();
+}
+
+function startSeatQrCamera_() {
+  const el = document.getElementById('qr-reader-seat');
+  el.innerHTML = '';
+  const qr = new Html5Qrcode('qr-reader-seat');
+  state.html5QrSeat = qr;
+  qr.start({ facingMode: 'environment' }, { fps: 10, qrbox: 220 },
+    (decodedText) => onSeatQrDecoded_(decodedText),
+    () => {}
+  ).catch(() => toast('เปิดกล้องไม่ได้ กรุณาอนุญาตการใช้กล้อง'));
+}
+function stopSeatQrCamera_() {
+  if (state.html5QrSeat) { state.html5QrSeat.stop().catch(() => {}); state.html5QrSeat = null; }
+}
+
+let seatQrLock_ = false;
+async function onSeatQrDecoded_(rawQr) {
+  if (seatQrLock_) return;
+  seatQrLock_ = true;
+  const seatId = state.seatAssignTarget && state.seatAssignTarget.seatId;
+  if (seatId) {
+    const r = await api('seat.assignByQr', { busId: state.currentSeatBusId, seatId: seatId, raw: rawQr, roundId: state.currentSeatRoundId });
+    if (!r.ok) {
+      toast(r.error.message);
+    } else {
+      closeSeatAssignDialog_();
+      toast('บรรจุที่นั่งแล้ว');
+      await loadSeatMap_();
+    }
+  }
+  setTimeout(() => { seatQrLock_ = false; }, 1000);
+}
+
+onClickGuarded_('btn-seat-new-submit', async () => {
+  const fullName = document.getElementById('seat-new-fullname').value.trim();
+  const classLevel = document.getElementById('seat-new-classlevel').value.trim();
+  const room = document.getElementById('seat-new-room').value.trim();
+  const guardianPhone = document.getElementById('seat-new-guardianphone').value.trim();
+  if (!fullName || !classLevel || !room || !guardianPhone) { toast('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
+  const seatId = state.seatAssignTarget && state.seatAssignTarget.seatId;
+  if (!seatId) return;
+
+  const created = await api('student.quickCreate', {
+    fullName: fullName, nickname: document.getElementById('seat-new-nickname').value.trim(),
+    classLevel: classLevel, room: room, guardianPhone: guardianPhone,
+    busId: state.currentSeatBusId, roundId: state.currentSeatRoundId
+  });
+  if (!created.ok) { toast(created.error.message); return; }
+
+  const assigned = await api('seat.assign', { busId: state.currentSeatBusId, seatId: seatId, studentId: created.data.student.student_id });
+  if (!assigned.ok) { toast(assigned.error.message); return; }
+  closeSeatAssignDialog_();
+  toast('เพิ่มนักเรียนใหม่และลงที่นั่งแล้ว');
+  await loadSeatMap_();
+});
+
+// ---------------------------------------------------------------------------
+// dlg-seat-rows — จัดการที่นั่ง: เพิ่ม/ลดแถว, เพิ่มที่นั่งพิเศษ (ลบที่นั่งเดี่ยวทำจากปุ่ม × บนผังโดยตรง)
+// ---------------------------------------------------------------------------
+
+document.getElementById('btn-seatmap-rows').addEventListener('click', guardClick_(() => {
+  document.getElementById('dlg-seat-rows').classList.add('show');
+}));
+document.getElementById('dlg-seat-rows-cancel').addEventListener('click', () => document.getElementById('dlg-seat-rows').classList.remove('show'));
+
+onClickGuarded_('btn-seat-add-row', async () => {
+  const r = await api('bus.seatLayoutAddRow', { busId: state.currentSeatBusId });
+  if (!r.ok) { toast(r.error.message); return; }
+  toast('เพิ่มแถวแล้ว');
+  await loadSeatMap_();
+});
+onClickGuarded_('btn-seat-remove-row', async () => {
+  if (!confirm('ลบแถวสุดท้ายออกจากผัง?')) return;
+  const r = await api('bus.seatLayoutRemoveRow', { busId: state.currentSeatBusId });
+  if (!r.ok) { toast(r.error.message); return; }
+  toast('ลบแถวแล้ว');
+  await loadSeatMap_();
+});
+onClickGuarded_('btn-seat-add-extra', async () => {
+  const row = Number(document.getElementById('seat-extra-row').value);
+  const side = document.getElementById('seat-extra-side').value;
+  if (!row || row < 1) { toast('กรุณาระบุแถวที่ให้ถูกต้อง'); return; }
+  const r = await api('bus.seatLayoutAddExtraSeat', { busId: state.currentSeatBusId, row: row, side: side });
+  if (!r.ok) { toast(r.error.message); return; }
+  toast('เพิ่มที่นั่งพิเศษแล้ว');
+  await loadSeatMap_();
+});
+
+// ---------------------------------------------------------------------------
+// dlg-seat-transfer — ส่งที่นั่งไปรถอื่น (ต้องมีคนฝั่งปลายทางกดรับก่อนถึงจะนั่งจริง)
+// ---------------------------------------------------------------------------
+
+async function openSeatTransferDialog_(seatId) {
+  state.seatTransferTarget = { seatId };
+  const sel = document.getElementById('seat-transfer-bus');
+  sel.innerHTML = '<option>กำลังโหลด...</option>';
+  document.getElementById('dlg-seat-transfer').classList.add('show');
+  const r = await api('me.buses', {});
+  const buses = (r.ok ? r.data : []).filter(b => b.bus_id !== state.currentSeatBusId);
+  sel.innerHTML = buses.length
+    ? buses.map(b => '<option value="' + b.bus_id + '">' + (b.bus_name || b.bus_code) + '</option>').join('')
+    : '<option value="">ไม่มีรถอื่นให้เลือก</option>';
+}
+document.getElementById('dlg-seat-transfer-cancel').addEventListener('click', () => document.getElementById('dlg-seat-transfer').classList.remove('show'));
+onClickGuarded_('dlg-seat-transfer-save', async () => {
+  const seatId = state.seatTransferTarget && state.seatTransferTarget.seatId;
+  const toBusId = document.getElementById('seat-transfer-bus').value;
+  if (!seatId || !toBusId) { toast('กรุณาเลือกรถปลายทาง'); return; }
+  const r = await api('seat.transferPropose', { fromBusId: state.currentSeatBusId, fromSeatId: seatId, toBusId: toBusId });
+  if (!r.ok) { toast(r.error.message); return; }
+  document.getElementById('dlg-seat-transfer').classList.remove('show');
+  toast('ส่งคำขอย้ายรถแล้ว รอฝั่งปลายทางรับเข้า');
+  await loadSeatMap_();
+});
 
 // ---------------------------------------------------------------------------
 // S-06 "ประวัติดำเนินการ" (เดิมชื่อ "ประวัติรอบรถ") — SUPER_ADMIN เท่านั้น (server เช็คซ้ำทุก action
