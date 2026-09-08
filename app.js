@@ -1278,6 +1278,26 @@ async function loadSeatMap_() {
   renderSeatGrid_(r.data);
 }
 
+// เช็คทั้งหมด/ยกเลิกทั้งหมด — ยิงทีละคนแบบขนาน (แพทเทิร์นเดียวกับ "ลบทั้งหมด" ในหน้าประวัติดำเนินการ)
+// ใช้ bulk action จริงเป็นการยืนยันครั้งเดียวเมื่อยอดครบแล้ว/ต้องเช็คใหม่ทั้งคันเท่านั้น จึง reload ผัง
+// ทั้งหน้าได้ตามปกติ (ต่างจากติ๊กทีละที่นั่งที่อัปเดตเงียบๆ)
+onClickGuarded_('btn-seatmap-check-all', async () => {
+  const seats = [...document.querySelectorAll('#s26-grid [data-seat-tap]')].filter(el => el.dataset.seatChecked !== '1');
+  if (!seats.length) { toast('เช็คครบทุกคนแล้ว'); return; }
+  if (!confirm('เช็ค "อยู่บนรถ" ให้ครบทุกคน (' + seats.length + ' คน)?')) return;
+  const results = await Promise.all(seats.map(el => api('trip.addStudent', { roundId: state.currentSeatRoundId, studentId: el.dataset.seatStudent, clientEventId: uuid() })));
+  toast(results.every(r => r.ok) ? 'เช็คครบทุกคนแล้ว' : 'เช็คไม่สำเร็จบางคน');
+  await loadSeatMap_();
+});
+onClickGuarded_('btn-seatmap-uncheck-all', async () => {
+  const seats = [...document.querySelectorAll('#s26-grid [data-seat-tap]')].filter(el => el.dataset.seatChecked === '1');
+  if (!seats.length) { toast('ยังไม่มีใครถูกเช็คเลย'); return; }
+  if (!confirm('ยกเลิกการเช็คทุกคน (' + seats.length + ' คน) — ต้องเช็คใหม่ทั้งหมด?')) return;
+  const results = await Promise.all(seats.map(el => api('scan.undo', { roundId: state.currentSeatRoundId, studentId: el.dataset.seatStudent })));
+  toast(results.every(r => r.ok) ? 'ยกเลิกครบทุกคนแล้ว' : 'ยกเลิกไม่สำเร็จบางคน');
+  await loadSeatMap_();
+});
+
 function renderIncomingTransfers_(transfers) {
   const el = document.getElementById('s26-incoming');
   if (!transfers.length) { el.innerHTML = ''; return; }
@@ -1436,18 +1456,23 @@ function wireSeatDrag_(grid) {
         return;
       }
       if (wasPicked) return; // กดค้างจนยกขึ้นแล้วแต่ปล่อยเฉยๆ ไม่ได้ย้ายไปไหน = ยกเลิก ไม่ติ๊ก
-      await toggleSeat_(el.dataset.seatStudent, el.dataset.seatChecked === '1');
+      await toggleSeat_(el, el.dataset.seatChecked === '1');
     }));
     el.addEventListener('pointercancel', reset_);
   });
 }
 
-async function toggleSeat_(studentId, currentlyChecked) {
+// ติ๊ก/ถอนติ๊กแค่ที่นั่งเดียว ไม่ต้อง reload ผังทั้งหน้าใหม่ (ไม่มี spinner/กระพริบ) — รู้ผลอยู่แล้วว่า
+// เปลี่ยนเป็นอะไรจากการกดครั้งนี้เอง แก้ class/attribute ของที่นั่งนั้นตรงๆ พอ ไม่ต้องยิง seat.roundView ซ้ำ
+async function toggleSeat_(seatEl, currentlyChecked) {
+  const studentId = seatEl.dataset.seatStudent;
   const r = currentlyChecked
     ? await api('scan.undo', { roundId: state.currentSeatRoundId, studentId })
     : await api('trip.addStudent', { roundId: state.currentSeatRoundId, studentId, clientEventId: uuid() });
   if (!r.ok) { toast(r.error.message); return; }
-  await loadSeatMap_();
+  const nowChecked = !currentlyChecked;
+  seatEl.classList.toggle('checked', nowChecked);
+  seatEl.dataset.seatChecked = nowChecked ? '1' : '0';
 }
 
 // ---------------------------------------------------------------------------
