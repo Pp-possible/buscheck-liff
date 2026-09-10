@@ -1286,7 +1286,7 @@ document.getElementById('btn-seatmap-edit').addEventListener('click', guardClick
   document.getElementById('btn-seatmap-edit').classList.toggle('active', state.seatEditMode);
   const grid = document.querySelector('#s26-grid .seat-grid');
   if (grid) grid.classList.toggle('edit-mode', state.seatEditMode);
-  toast(state.seatEditMode ? 'โหมดจัดการที่นั่ง: แตะ ⇄/× บนที่นั่งได้แล้ว' : 'ออกจากโหมดจัดการที่นั่งแล้ว');
+  toast(state.seatEditMode ? 'โหมดจัดการที่นั่ง: แตะที่นั่งเพื่อลากย้าย หรือกด ⇄/× ได้แล้ว' : 'ออกจากโหมดจัดการที่นั่งแล้ว');
 }));
 
 async function loadSeatMap_() {
@@ -1433,51 +1433,45 @@ function renderSeatGrid_(data) {
   wireSeatDrag_(grid);
 }
 
-// กดค้างที่ที่นั่งก่อน (เหมือน "ยกที่นั่งขึ้น") แล้วค่อยลากไปวางที่อื่นได้ — แตะสั้นๆ ธรรมดา (ไม่ถึงเวลา
-// กดค้าง) ยังคงเป็นการติ๊กอยู่/ไม่อยู่เหมือนเดิมทุกประการ ไม่ได้เปลี่ยนพฤติกรรมเดิม แค่เพิ่มขั้น "กดค้าง
-// ก่อนลาก" กันลากพลาดตอนตั้งใจจะแค่แตะติ๊ก ใช้ Pointer Events ตัวเดียวครอบคลุมทั้งนิ้ว/เมาส์
+// การลากย้ายที่นั่งทำได้เฉพาะตอนเปิด "โหมดจัดการที่นั่ง" (ปุ่มกุญแจบนหัวจอ, state.seatEditMode)
+// เท่านั้น — แตะปุ๊บติดนิ้วทันที ไม่ต้องกดค้างรอเหมือนก่อน เพราะโหมดนี้เป็นการกดที่ตั้งใจเข้ามาอยู่แล้ว
+// ไม่ต้องกันความกำกวมกับ "แตะเพื่อติ๊ก" อีก (ตัดปัญหาเดิมที่กดค้างรอ 450ms แล้วเบราว์เซอร์แย่งไปตีความเป็น
+// เลือกตัวหนังสือก่อนจะเริ่มลากทัน) — โหมดปกตินอกเหนือจากนี้ แตะที่นั่ง = ติ๊กอยู่/ไม่อยู่เหมือนเดิมทุกประการ
+// ไม่มีการลากเลย ใช้ Pointer Events ตัวเดียวครอบคลุมทั้งนิ้ว/เมาส์
 function wireSeatDrag_(grid) {
-  const LONG_PRESS_MS = 450;
-  const MOVE_CANCEL_THRESHOLD = 10; // ขยับเกินนี้ก่อนครบเวลากดค้าง = ยกเลิกท่าทางนี้ไปเลย (ไม่ลาก ไม่ติ๊ก)
-
   grid.querySelectorAll('[data-seat-tap]').forEach(el => {
-    let startX = 0, startY = 0, longPressTimer = null, picked = false, moved = false, lastOver = null;
+    let startX = 0, startY = 0, active = false, dragging = false, moved = false, lastOver = null;
 
-    function clearTimer_() { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }
     function reset_() {
-      clearTimer_();
       el.classList.remove('dragging');
       el.style.transform = '';
       el.style.pointerEvents = '';
       if (lastOver) { lastOver.classList.remove('drop-target'); lastOver = null; }
-      picked = false; moved = false;
+      active = false; dragging = false; moved = false;
     }
 
-    // preventDefault ตั้งแต่ pointerdown ทุกครั้ง (ต้องลงทะเบียน {passive:false} ถึงจะมีผลจริง) —
-    // กันเบราว์เซอร์ตีความการกดค้างเป็น "เลือกข้อความ"/เปิดเมนู copy เอง ซึ่ง user-select:none ใน CSS
-    // อย่างเดียวเอาไม่อยู่ในบางเบราว์เซอร์ (ตัวกดติ๊กเองก็ไม่ได้พึ่ง native click event อยู่แล้ว จึง
-    // preventDefault ได้เต็มที่โดยไม่กระทบการติ๊ก)
+    // preventDefault ตั้งแต่ pointerdown ทุกครั้ง ไม่ว่าจะอยู่โหมดไหน (ต้องลงทะเบียน {passive:false}
+    // ถึงจะมีผลจริง) — กันเบราว์เซอร์ตีความการกดค้างเป็น "เลือกข้อความ"/เปิดเมนู copy เอง ซึ่ง
+    // user-select:none ใน CSS อย่างเดียวเอาไม่อยู่ในบางเบราว์เซอร์ (ตัวกดติ๊กเองก็ไม่ได้พึ่ง native
+    // click event อยู่แล้ว จึง preventDefault ได้เต็มที่โดยไม่กระทบการติ๊ก)
     el.addEventListener('pointerdown', (e) => {
       if (e.target.closest('[data-seat-unassign]') || e.target.closest('[data-seat-transfer]')) return;
       if (e.cancelable) e.preventDefault();
+      active = true;
       startX = e.clientX; startY = e.clientY;
       el.setPointerCapture(e.pointerId);
-      longPressTimer = setTimeout(() => {
-        picked = true; // "ยกที่นั่งขึ้น" แล้ว — ลากได้ตั้งแต่ตอนนี้
+      if (state.seatEditMode) {
+        dragging = true; // โหมดจัดการที่นั่ง — "ยกที่นั่งขึ้น" ทันทีตั้งแต่แตะ ลากได้เลย
         el.classList.add('dragging');
         el.style.pointerEvents = 'none';
         if (navigator.vibrate) navigator.vibrate(15);
-      }, LONG_PRESS_MS);
+      }
     }, { passive: false });
     el.addEventListener('pointermove', (e) => {
-      if (!el.hasPointerCapture(e.pointerId)) return;
+      if (!dragging || !el.hasPointerCapture(e.pointerId)) return;
       if (e.cancelable) e.preventDefault();
-      const dx = e.clientX - startX, dy = e.clientY - startY;
-      if (!picked) {
-        if (Math.hypot(dx, dy) > MOVE_CANCEL_THRESHOLD) clearTimer_(); // ขยับก่อนกดค้างครบเวลา ไม่นับเป็นลาก
-        return;
-      }
       moved = true;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
       el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
       const overEl = document.elementFromPoint(e.clientX, e.clientY);
       const overSeat = overEl && overEl.closest && overEl.closest('.seat');
@@ -1486,23 +1480,24 @@ function wireSeatDrag_(grid) {
     }, { passive: false });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     el.addEventListener('pointerup', guardClick_(async (e) => {
-      if (!el.hasPointerCapture(e.pointerId)) return;
+      if (!active || !el.hasPointerCapture(e.pointerId)) return; // ปุ่ม ⇄/× จับ pointer นี้ไปแล้ว ไม่ใช่ตัวที่นั่งเอง
       el.releasePointerCapture(e.pointerId);
-      const wasPicked = picked, wasMoved = moved;
+      const wasDragging = dragging, wasMoved = moved;
       const overEl = wasMoved ? document.elementFromPoint(e.clientX, e.clientY) : null;
       const overSeat = overEl && overEl.closest && overEl.closest('.seat');
       reset_();
 
-      if (wasMoved && overSeat && overSeat !== el) {
-        const toSeatId = overSeat.dataset.seatTap || overSeat.dataset.seatEmpty;
-        if (toSeatId) {
-          const r = await api('seat.move', { busId: state.currentSeatBusId, fromSeatId: el.dataset.seatTap, toSeatId: toSeatId });
-          if (!r.ok) toast(r.error.message);
-          await loadSeatMap_();
+      if (wasDragging) {
+        if (wasMoved && overSeat && overSeat !== el) {
+          const toSeatId = overSeat.dataset.seatTap || overSeat.dataset.seatEmpty;
+          if (toSeatId) {
+            const r = await api('seat.move', { busId: state.currentSeatBusId, fromSeatId: el.dataset.seatTap, toSeatId: toSeatId });
+            if (!r.ok) toast(r.error.message);
+            await loadSeatMap_();
+          }
         }
-        return;
+        return; // แตะในโหมดจัดการที่นั่งแล้วปล่อยโดยไม่ลาก = ไม่ทำอะไร (โหมดนี้ไว้ย้ายที่นั่งอย่างเดียว)
       }
-      if (wasPicked) return; // กดค้างจนยกขึ้นแล้วแต่ปล่อยเฉยๆ ไม่ได้ย้ายไปไหน = ยกเลิก ไม่ติ๊ก
       await toggleSeat_(el, el.dataset.seatChecked === '1');
     }));
     el.addEventListener('pointercancel', reset_);
