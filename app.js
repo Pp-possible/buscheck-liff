@@ -2021,8 +2021,9 @@ onClickGuarded_('btn-s16-checker-run', async () => {
 // ---------------------------------------------------------------------------
 // S-07 สรุปยอดวัน — การ์ดสรุปต่อ "รอบเช็ค" หนึ่งกลุ่ม (session: ชื่อ+ประเภท+เวลาเดียวกัน ครอบหลายคันรถ)
 // สร้างอัตโนมัติจาก "รอบเช็ควันนี้" (ข้อมูลชุดเดียวกับ S-02) กดเข้าไปดูรายละเอียดขยายอยู่ในหน้าเดียวกันเลย
-// (accordion) ไม่เด้งไปหน้าอื่น — ยอดนักเรียน REGIS/สแกนแล้ว/ยังไม่สแกน เทียบกับยอด ACTIVE ทั้งโรงเรียน
-// เสมอ เพราะนักเรียนไม่ผูกกับรถคันไหนตายตัวแล้ว (17.12)
+// (accordion) ไม่เด้งไปหน้าอื่น — ยอดบรรจุที่นั่งแล้ว/สแกนแล้ว/ยังไม่สแกน เทียบกับยอด "บรรจุที่นั่งแล้ว"
+// รวมทุกคันเสมอ (ไม่ใช่ REGIS/ACTIVE ทั้งโรงเรียนอีกต่อไป — ยอด REGIS ทั้งหมดย้ายไปอยู่หน้า "นักเรียน"
+// S-18 แทน เพราะหน้านี้ตั้งใจให้เป็นการเช็คคนที่คาดว่าอยู่บนรถจริงเท่านั้น)
 // ---------------------------------------------------------------------------
 
 document.getElementById('btn-refresh-daysummary').addEventListener('click', () => loadDaySummary_());
@@ -2107,18 +2108,17 @@ function wireSessionCards_(groups) {
 // ข้อมูลประมวลรวมของ session นี้ + การ์ดรายคันรถ + การ์ดคนที่ยังไม่สแกน — กดคันรถ/ยังไม่สแกนแล้วเปิด
 // หน้าใหม่ (S-25) ไปเลย ไม่ขยายซ้อนอยู่ตรงนี้อีกชั้น เพราะรายชื่อนักเรียนอาจมีเป็นร้อยคน
 function renderSessionBody_(group, summary) {
-  const notScannedTotal = summary.schoolTotal - summary.scannedTotal;
+  const notScannedTotal = summary.seatedTotal - summary.scannedTotal;
   const openCount = group.rounds.filter(r => r.status === 'OPEN').length;
   const closedCount = group.rounds.filter(r => r.status === 'CLOSED').length;
 
   let html = '<div class="card" style="background:var(--bg-elevated);margin-bottom:10px;">' +
     '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-      '<div class="count-box"><div class="num">' + summary.schoolTotal + '</div><div class="label">REGIS ทั้งหมด</div></div>' +
+      '<div class="count-box"><div class="num">' + summary.seatedTotal + '</div><div class="label">บรรจุที่นั่งแล้ว</div></div>' +
       '<div class="count-box"><div class="num">' + summary.scannedTotal + '</div><div class="label">สแกนแล้ว</div></div>' +
       '<div class="count-box"><div class="num">' + notScannedTotal + '</div><div class="label">ยังไม่สแกน</div></div>' +
     '</div>' +
     '<div class="progress">รถกำลังเช็ค ' + openCount + ' คัน · ปิดรอบแล้ว ' + closedCount + ' คัน</div>' +
-    '<div class="progress">บรรจุที่นั่งแล้ว ' + (summary.seatedTotal || 0) + ' คน (รวมทุกคัน)</div>' +
     '</div>';
 
   html += '<div class="card-title" style="margin:0 0 6px;">รายคันรถ</div>';
@@ -2364,6 +2364,8 @@ async function loadStudentsList_() {
 // (ปุ่มโทรแยกจากพื้นที่การ์ดด้วย .btn ≥44px กันกดโดนผิดจุด), ปุ่มจัดการบัญชีล่างสุด
 function renderStudentsList_(students) {
   const list = document.getElementById('s18-list');
+  const countEl = document.getElementById('s18-count-total');
+  if (countEl) countEl.textContent = students.length;
   if (!students.length) { list.innerHTML = '<div class="empty-state">ไม่พบนักเรียน</div>'; return; }
   const isSuperAdmin = !!(state.profile && state.profile.level === 100);
 
