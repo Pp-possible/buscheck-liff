@@ -2503,6 +2503,14 @@ async function loadAlertsList_() {
 
 function renderAlertsList_(alerts) {
   const list = document.getElementById('s13-list');
+  state.currentAlertsRaw = alerts;
+  const ackAllBtn = document.getElementById('btn-ack-all-alerts');
+  const openCount = alerts.filter((a) => a.status === 'OPEN').length;
+  // ปุ่ม "รับทราบทั้งหมด (ลบถาวร)" ลบข้อมูลจริงหลังรับทราบ — ฝั่ง backend (alertDelete) บังคับ
+  // assertSuperAdmin_ อยู่แล้วไม่ว่า route จะประกาศ permission เป็นอะไร จึงโชว์ปุ่มนี้เฉพาะ super admin
+  // เท่านั้น กันคนอื่นกดแล้วเจอ error ลบไม่ได้ครึ่ง ๆ กลาง ๆ
+  if (ackAllBtn) ackAllBtn.style.display = (isSuperAdmin_() && openCount > 0) ? '' : 'none';
+
   if (!alerts.length) { list.innerHTML = '<div class="empty-state">ไม่มีการแจ้งเตือน</div>'; return; }
   const canAck = state.permissions.indexOf('alert.ack') !== -1;
 
@@ -2524,6 +2532,27 @@ function renderAlertsList_(alerts) {
     loadAlertsList_();
   })));
 }
+
+function isSuperAdmin_() { return !!(state.profile && state.profile.level === 100); }
+
+// รับทราบทั้งหมด + ลบถาวรทันที — เฉพาะ super admin (ตามที่ยืนยันแล้วว่ายอมรับความเสี่ยงข้อมูลหาย
+// ถาวรไม่มีประวัติเหลือ) ack ก่อนเพื่อให้ผ่าน E_VALIDATION ของ alertAck (ต้องเป็น OPEN เท่านั้น)
+// แล้วค่อยลบเฉพาะรายการที่ ack สำเร็จจริง กัน id ที่ใครเพิ่งจัดการไปพร้อมกันหลุดเข้ามา
+document.getElementById('btn-ack-all-alerts').addEventListener('click', guardClick_(async () => {
+  const openIds = (state.currentAlertsRaw || []).filter((a) => a.status === 'OPEN').map((a) => a.alert_id);
+  if (!openIds.length) { toast('ไม่มีรายการที่ต้องรับทราบ'); return; }
+  if (!confirm('รับทราบและลบแจ้งเตือนที่ยังไม่รับทราบทั้งหมด (' + openIds.length + ' รายการ) ถาวร? กู้คืนไม่ได้')) return;
+
+  const ackR = await api('alert.ack', { alertIds: openIds });
+  if (!ackR.ok) { toast(ackR.error.message); return; }
+  const ackedIds = (ackR.data && ackR.data.acked) || [];
+  if (!ackedIds.length) { toast('ไม่มีรายการที่รับทราบสำเร็จ'); loadAlertsList_(); return; }
+
+  const delResults = await Promise.all(ackedIds.map((id) => api('alert.delete', { alertId: id })));
+  const okCount = delResults.filter((r) => r.ok).length;
+  toast(okCount === ackedIds.length ? 'รับทราบและลบถาวรแล้ว ' + okCount + ' รายการ' : 'รับทราบแล้ว แต่ลบไม่สำเร็จบางรายการ (' + okCount + '/' + ackedIds.length + ')');
+  loadAlertsList_();
+}));
 
 document.getElementById('btn-new-round').addEventListener('click', () => openCreateRoundDialog_());
 document.getElementById('dlg-create-round-cancel').addEventListener('click', () => {
