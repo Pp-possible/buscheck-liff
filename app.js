@@ -1273,9 +1273,21 @@ document.getElementById('btn-goto-round-history').addEventListener('click', () =
 async function enterSeatMap_(roundId) {
   state.currentSeatRoundId = roundId;
   state.acceptingTransferId = null;
+  state.seatEditMode = false; // เข้าหน้าใหม่ทุกครั้งเริ่มจากโหมดสะอาด ไม่มีปุ่มย้ายรถ/ถอนที่นั่งค้างไว้
+  document.getElementById('btn-seatmap-edit').classList.remove('active');
   showScreen('S-26');
   await loadSeatMap_();
 }
+
+// ปุ่มกุญแจ — สลับโหมดจัดการที่นั่ง (โชว์/ซ่อนปุ่ม ⇄ ย้ายรถ กับ × ถอนที่นั่ง/ลบที่นั่งบนตัวที่นั่งแต่ละอัน)
+// ซ่อนไว้เป็นค่าเริ่มต้นกันเผลอกดโดนตอนติ๊กเช็คยอด/ลากย้ายที่นั่งเร็วๆ ตามที่ผู้ใช้ขอ
+document.getElementById('btn-seatmap-edit').addEventListener('click', guardClick_(() => {
+  state.seatEditMode = !state.seatEditMode;
+  document.getElementById('btn-seatmap-edit').classList.toggle('active', state.seatEditMode);
+  const grid = document.querySelector('#s26-grid .seat-grid');
+  if (grid) grid.classList.toggle('edit-mode', state.seatEditMode);
+  toast(state.seatEditMode ? 'โหมดจัดการที่นั่ง: แตะ ⇄/× บนที่นั่งได้แล้ว' : 'ออกจากโหมดจัดการที่นั่งแล้ว');
+}));
 
 async function loadSeatMap_() {
   const grid = document.getElementById('s26-grid');
@@ -1385,7 +1397,7 @@ function renderSeatGrid_(data) {
       '</div>'
     );
   }
-  grid.innerHTML = '<div class="seat-grid">' + rowsHtml.join('') + '</div>';
+  grid.innerHTML = '<div class="seat-grid' + (state.seatEditMode ? ' edit-mode' : '') + '">' + rowsHtml.join('') + '</div>';
 
   grid.querySelectorAll('[data-seat-empty]').forEach(el => el.addEventListener('click', guardClick_(async () => {
     if (state.acceptingTransferId) {

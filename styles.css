@@ -285,16 +285,21 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; touc
 .seat.empty { color: var(--text-muted); }
 .seat.assigned { border-style: solid; border-color: var(--color-absent); background: var(--bg-elevated); color: var(--text); font-weight: 600; touch-action: none; }
 .seat.checked { border-color: var(--color-board); background: var(--color-board-badge); color: #fff; }
+/* ⇄/× ซ่อนไว้ตามปกติ กันเผลอโดนตอนแตะ/ลากที่นั่ง — โผล่เฉพาะตอนเปิดโหมดจัดการที่นั่ง
+   (ปุ่มกุญแจบนหัวจอ #btn-seatmap-edit สลับ .edit-mode ให้ .seat-grid) */
+.seat .seat-unassign, .seat .seat-transfer { display: none; }
+.seat-grid.edit-mode .seat .seat-unassign, .seat-grid.edit-mode .seat .seat-transfer { display: flex; }
 .seat .seat-unassign {
   position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%;
-  background: var(--color-error); color: #fff; font-size: 12px; line-height: 1; display: flex;
+  background: var(--color-error); color: #fff; font-size: 12px; line-height: 1;
   align-items: center; justify-content: center; box-shadow: var(--shadow-sm);
 }
 .seat .seat-transfer {
   position: absolute; top: -6px; left: -6px; width: 20px; height: 20px; border-radius: 50%;
-  background: var(--color-transfer); color: #fff; font-size: 12px; line-height: 1; display: flex;
+  background: var(--color-transfer); color: #fff; font-size: 12px; line-height: 1;
   align-items: center; justify-content: center; box-shadow: var(--shadow-sm);
 }
+#btn-seatmap-edit.active { background: var(--color-primary); color: #fff; }
 .seat.dragging { transition: none; z-index: 20; box-shadow: var(--shadow-lg); opacity: 0.9; touch-action: none; }
 .seat.drop-target { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary) inset; }
 
