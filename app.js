@@ -945,7 +945,18 @@ function renderRoundsList_(rounds, opts) {
   rounds.forEach(r => { state.roundsById[r.round_id] = r; });
 
   const canManage = state.permissions && state.permissions.indexOf('round.open') !== -1;
-  const groups = groupRoundsForDisplay_(rounds);
+  let groups = groupRoundsForDisplay_(rounds);
+
+  // หน้า "รอบเช็ควันนี้" (ไม่ใช่ประวัติ) — ระดับใต้ super admin เห็นเฉพาะกลุ่มที่มีคันรถเปิดอยู่จริง
+  // เท่านั้น (ตัดกลุ่มที่ยังรอเปิด/ปิดหมดแล้วออกไป ทำอะไรไม่ได้อยู่ดี) — ไม่กระทบ state.activeRoundsRaw
+  // ที่เก็บไว้ข้างบน จึงยังเข้า S-14 ดูครบทุกคันรถของกลุ่มนั้นได้ตามเดิม และหน้าประวัติ (S-06) ก็ไม่ถูกกรอง
+  const isSuperAdmin = !!(state.profile && state.profile.level === 100);
+  if (!archivedList && !isSuperAdmin) groups = groups.filter(g => aggregateGroupStatus_(g) === 'OPEN');
+
+  if (!groups.length) {
+    list.innerHTML = '<div class="empty-state">' + (archivedList ? 'ยังไม่มีรอบที่เก็บไว้' : (isSuperAdmin ? 'ยังไม่มีรอบเช็ค กด "+" ด้านบนเพื่อสร้างรอบใหม่' : 'ยังไม่มีรอบเช็คที่เปิดอยู่ตอนนี้')) + '</div>';
+    return;
+  }
 
   list.innerHTML = groups.map(group => {
     const typeLabel = ROUND_TYPE_LABELS_[group.round_type] || group.round_type;
