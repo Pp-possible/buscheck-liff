@@ -2118,6 +2118,7 @@ function renderSessionBody_(group, summary) {
       '<div class="count-box"><div class="num">' + notScannedTotal + '</div><div class="label">ยังไม่สแกน</div></div>' +
     '</div>' +
     '<div class="progress">รถกำลังเช็ค ' + openCount + ' คัน · ปิดรอบแล้ว ' + closedCount + ' คัน</div>' +
+    '<div class="progress">บรรจุที่นั่งแล้ว ' + (summary.seatedTotal || 0) + ' คน (รวมทุกคัน)</div>' +
     '</div>';
 
   html += '<div class="card-title" style="margin:0 0 6px;">รายคันรถ</div>';
