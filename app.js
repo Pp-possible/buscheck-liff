@@ -1291,6 +1291,19 @@ async function loadSeatMap_() {
   state.currentSeatBusId = r.data.busId;
   renderIncomingTransfers_(r.data.incomingTransfers || []);
   renderSeatGrid_(r.data);
+  refreshSeatStats_();
+}
+
+// ยอดของผังที่นั่งคันนี้ — มีชื่อ (ที่นั่งที่บรรจุคนแล้ว) / เช็คแล้ว / ยังไม่เช็ค — อ่านจาก DOM ตรงๆ
+// (ไม่ใช่ยิง seat.roundView ซ้ำ) เพื่อให้ใช้ร่วมกับการติ๊กเงียบๆ ของ toggleSeat_ ได้โดยไม่ทำให้กระพริบ
+function refreshSeatStats_() {
+  const seatEls = [...document.querySelectorAll('#s26-grid [data-seat-tap]')];
+  const checkedCount = seatEls.filter((el) => el.dataset.seatChecked === '1').length;
+  const remaining = seatEls.length - checkedCount;
+  document.getElementById('s26-count-named').textContent = seatEls.length;
+  document.getElementById('s26-count-checked').textContent = checkedCount;
+  document.getElementById('s26-count-remaining').textContent = remaining;
+  document.getElementById('s26-count-remaining-box').classList.toggle('done', remaining === 0);
 }
 
 // เช็คทั้งหมด/ยกเลิกทั้งหมด — ยิงทีละคนแบบขนาน (แพทเทิร์นเดียวกับ "ลบทั้งหมด" ในหน้าประวัติดำเนินการ)
@@ -1495,6 +1508,7 @@ async function toggleSeat_(seatEl, currentlyChecked) {
   const nowChecked = !currentlyChecked;
   seatEl.classList.toggle('checked', nowChecked);
   seatEl.dataset.seatChecked = nowChecked ? '1' : '0';
+  refreshSeatStats_();
 }
 
 // ---------------------------------------------------------------------------
