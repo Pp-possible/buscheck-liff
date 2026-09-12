@@ -372,6 +372,9 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; touc
 /* .row1/.progress/.status-badge/.warn เป็นคลาสกลางที่ใช้ร่วมกันในการ์ดหลายแบบทั่วแอพ (.round-item เดิม,
    .card ของ S-07/S-25/S-18 ฯลฯ) เลยประกาศเป็น top-level ไม่ผูกกับ .round-item อีกต่อไป */
 .row1 { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+/* ชื่อรถ (การ์ดรอบรถ S-14/S-07) — แยกเป็นบรรทัดหัวเรื่องของตัวเอง เด่นกว่า .row1 ปกติ เพราะเป็น
+   ข้อมูลที่ครูมองหาก่อนอันดับแรกเวลาไล่สายตาหาการ์ดของรถคันตัวเอง ส่วนสถานะ/ยอดย้ายลง .row1 แทน */
+.bus-title { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: var(--text-xl); margin-bottom: 6px; }
 .status-badge {
   padding: 2px 10px; border-radius: 999px; font-size: 1em; font-weight: 700; color: #fff;
   background: var(--color-absent-badge); white-space: nowrap;

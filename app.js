@@ -1094,7 +1094,8 @@ function renderSessionBusCards_(rounds, opts) {
       html += '<div class="round-item-content">';
     }
 
-    html += '<div class="row1"><span class="status-badge">' + (busLabel || '—') + '</span> ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
+    html += '<div class="bus-title">' + ic('bus') + ' ' + (busLabel || '—') + '</div>' +
+      '<div class="row1"><span class="status-badge">' + statusLabel + '</span> ' + round.checked + '/' + round.expected + ' คน</div>' +
       '<div class="progress">' + checkers + '</div>' +
       (isPlanned && !archivedList && isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-open="' + round.round_id + '">เปิดรอบ</button>' : '') +
       (isPlanned && !archivedList && !isSuperAdmin ? '<button class="btn btn-secondary" style="margin-top:8px" data-wait-open="1">รอเปิด</button>' : '') +
@@ -2140,7 +2141,8 @@ function renderBusMiniCard_(round) {
   const badgeCls = round.status === 'OPEN' ? 'badge-open' : round.status === 'CLOSED' ? 'badge-closed' : 'badge-none';
   return '<div class="card" style="margin-bottom:8px;">' +
     '<div data-bus-open="1" data-round-id="' + round.round_id + '" style="cursor:pointer;">' +
-      '<div class="row1"><span class="status-badge ' + badgeCls + '">' + (busLabel || '—') + '</span> ' + round.checked + '/' + round.expected + ' ' + statusLabel + '</div>' +
+      '<div class="bus-title">' + ic('bus') + ' ' + (busLabel || '—') + '</div>' +
+      '<div class="row1"><span class="status-badge ' + badgeCls + '">' + statusLabel + '</span> ' + round.checked + '/' + round.expected + ' คน</div>' +
       '<div class="drill-hint">ดูรายชื่อที่สแกนแล้ว →</div>' +
     '</div>' +
     '</div>';
