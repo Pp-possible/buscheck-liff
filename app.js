@@ -985,7 +985,8 @@ function renderRoundsList_(rounds, opts) {
     }
 
     html += '<div class="group-title">' + group.round_name + '</div>' +
-      '<div class="row1"><span class="status-badge">' + statusLabel + '</span> <span class="row1-meta">' + typeLabel + ' · ' + formatThaiDateTime_(group.scheduled_at) + '</span></div>' +
+      '<div class="row1"><span class="status-badge">' + statusLabel + '</span></div>' +
+      '<div class="row1-meta">' + typeLabel + ' · ' + formatThaiDateTime_(group.scheduled_at) + '</div>' +
       '<div class="progress">' + group.rounds.length + ' คัน · ' + checked + '/' + expected + ' คนแล้ว</div>' +
       (archivedList && canManage ? '<button class="btn btn-danger" style="margin-top:8px" data-delete-permanent-group="' + group.key + '">ลบถาวรทั้งกลุ่ม</button>' : '') +
       '<div class="drill-hint">ดูรายคันรถ →</div>' +
@@ -2080,7 +2081,8 @@ function renderSessionCard_(group, idx) {
   return '<div class="card" style="margin:12px 16px;">' +
     '<div data-session-toggle="' + idx + '" style="cursor:pointer;">' +
       '<div class="group-title">' + group.round_name + '</div>' +
-      '<div class="row1"><span class="status-badge ' + meta.cls + '">' + meta.icon + ' ' + meta.label + '</span> <span class="row1-meta">' + typeLabel + ' · ' + formatThaiDateTime_(group.scheduled_at) + '</span></div>' +
+      '<div class="row1"><span class="status-badge ' + meta.cls + '">' + meta.icon + ' ' + meta.label + '</span></div>' +
+      '<div class="row1-meta">' + typeLabel + ' · ' + formatThaiDateTime_(group.scheduled_at) + '</div>' +
       '<div class="progress">' + group.rounds.length + ' คัน' +
         ' (' + openCount + ' กำลังเช็ค · ' + closedCount + ' ปิดแล้ว' + (plannedCount ? ' · ' + plannedCount + ' รอเปิด' : '') + ')</div>' +
       '<div class="drill-hint" id="session-caret-' + idx + '">ดูรายละเอียด →</div>' +
